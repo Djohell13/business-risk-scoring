@@ -11,7 +11,7 @@ Ce projet est une solution complète de Data Science permettant d'analyser et de
 
 ## 📊 Modèle de Données
 
-Voici comment les données sont structurées pour l'analyse de risque :
+Voici comment les données seront structurées pour l'analyse de risque :
 
 ```mermaid
 classDiagram
@@ -59,5 +59,6 @@ streamlit run app.py
 * Modélisation : Utilisation de XGBoost avec optimisation des hyperparamètres.
 
 * Visualisation : Dashboard multipages (Firmographie, Analyse territoriale, Projections à 3 ans).
+
 
 Auteur : Joël Termondjian
