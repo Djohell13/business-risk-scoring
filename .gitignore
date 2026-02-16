@@ -1,0 +1,39 @@
+/*
+
+!/src/
+!.gitignore
+!/README.md
+
+# --- Données et Modèles ---
+src/datas/*
+!src/datas/*.ipynb
+
+# Formats de données et modèles (partout)
+*.csv
+*.xls
+*.xlsx
+*.parquet
+*.pickle
+*.pkl
+*.h5
+*.joblib
+*.json
+
+# Logs d'expérimentations MLflow
+**/mlruns/
+
+# --- Sécurité et Credentials (CRITIQUE) ---
+
+**/.env
+src/model/credentials.toml
+**/business-risk/.streamlit/
+
+# --- Sorties de scripts / UML ---
+src/uml/*.png
+
+# --- Python & Environnement ---
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store

@@ -1,0 +1,46 @@
+@startuml
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam class {
+    BackgroundColor White
+    ArrowColor #2B82C9
+    BorderColor #2B82C9
+}
+
+title Modélisation UML - Scoring Risque Défaillance (Joël Termondjian)
+
+class "Entreprise" as Ent {
+    + SIRET : String <<PK>>
+    --
+    - Raison_Sociale : String
+    - Date_Creation : Date
+    - Code_NAF : String
+    - Secteur_Activite : String
+}
+
+class "Bilan_Annuel" as Bilan {
+    + ID_Bilan : Integer <<PK>>
+    --
+    - SIRET : String <<FK>>
+    - Annee_Exercice : Integer
+    - Chiffre_Affaires : Float
+    - Resultat_Net : Float
+    - Dette_Totale : Float
+    - Ebitda : Float
+}
+
+class "Evenement_Risque" as Event {
+    + ID_Event : Integer <<PK>>
+    --
+    - SIRET : String <<FK>>
+    - Type_Defaut : String
+    - Date_Apparition : Date
+    - Montant_Impaye : Float
+}
+
+note bottom of Ent : Pivot central de l'analyse
+
+Ent "1" -- "0..*" Bilan : "possède"
+Ent "1" -- "0..*" Event : "subit"
+
+@enduml

@@ -1,0 +1,6 @@
+pandas
+streamlit
+plotly
+pyarrow
+boto3
+s3fs
