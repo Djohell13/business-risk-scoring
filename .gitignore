@@ -4,9 +4,10 @@
 !.gitignore
 !/README.md
 
-# --- Données et Modèles ---
-src/datas/*
-!src/datas/*.ipynb
+# --- Données et Modèles (ETL avec sous-dossiers) ---
+!src/etl/             
+!src/etl/*/            
+!src/etl/**/*.ipynb     
 
 # Formats de données et modèles (partout)
 *.csv
