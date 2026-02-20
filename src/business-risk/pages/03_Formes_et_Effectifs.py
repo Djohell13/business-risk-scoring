@@ -240,13 +240,13 @@ fig_risk = px.bar(
     x="label_effectif",
     y="taux_fermeture",
     text="taux_fermeture",
-    title="⚡ Risque de fermeture par Taille d'Entreprise",
+    title="⚡ Répartition des fermetures selon le nombre de salariés",
     labels={"label_effectif": "Taille de l'entreprise", "taux_fermeture": "Taux de fermeture (%)"},
     color="taux_fermeture",
     color_continuous_scale="Reds"
 )
 
-# Réglage de l'échelle pour éviter que le texte du haut soit coupé
+# Réglage de l'échelle
 max_taux = df_size_risk["taux_fermeture"].max() if not df_size_risk.empty else 100
 
 fig_risk.update_traces(
