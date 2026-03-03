@@ -1,20 +1,23 @@
-FROM python:3.13.5-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y \
     build-essential \
     curl \
-    git \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt ./
-COPY src/ ./src/
+RUN pip install --no-cache-dir poetry
 
-RUN pip3 install -r requirements.txt
+COPY pyproject.toml poetry.lock ./
 
-EXPOSE 8501
+RUN poetry config virtualenvs.create false \
+    && poetry install --no-interaction --no-ansi --no-root
 
-HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
+COPY . .
 
-ENTRYPOINT ["streamlit", "run", "src/streamlit_app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+EXPOSE 7860
+
+HEALTHCHECK CMD curl --fail http://localhost:7860/_stcore/health
+
+ENTRYPOINT ["streamlit", "run", "Expertise_et_vision.py", "--server.port=7860", "--server.address=0.0.0.0"]

@@ -20,7 +20,7 @@ def get_geojson():
 
 geojson_france = get_geojson()
 
-st.header("🔮 Projection des Risques à 3 ans")
+st.title("🔮 6.Projection des Risques à 3 ans")
 
 # Bloc méthodologique compatible Mode Clair / Mode Sombre
 st.markdown("""
