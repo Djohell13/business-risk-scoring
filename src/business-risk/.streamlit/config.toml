@@ -7,20 +7,18 @@ maxUploadSize = 50
 [browser]
 gatherUsageStats = false
 
+[client]
+
+toolbarMode = "minimal"
+
 [theme]
-# Rouge vif pour les actions et le rappel du risque
+
 primaryColor = "#E63946"
-
-# FOND DE PAGE : Plus sombre et profond (Ardoise)
-backgroundColor = "#203b53" 
-
-# BARRE LATÉRALE : Légèrement plus claire que le fond pour le contraste
-secondaryBackgroundColor = "#627D98"
-
-# TEXTE : Blanc cassé pour une lisibilité parfaite sur fond sombre
+backgroundColor = "#203b53"
+secondaryBackgroundColor = "#2c4a67"
 textColor = "#F0F4F8"
-
 font = "sans serif"
 
-[client]
-toolbarMode = "minimal"
+[ui]
+
+hideTopBar = true
