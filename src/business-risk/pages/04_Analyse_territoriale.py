@@ -20,9 +20,14 @@ def load_data_optimized():
         s3_path = f"s3://{bucket_name}/{file_path}"
         with fs.open(s3_path, mode='rb') as f:
             df_loaded = pd.read_parquet(f)
+        
+        # Nettoyage et conversion des dates
         df_loaded["Date_fermeture_finale"] = pd.to_datetime(df_loaded["Date_fermeture_finale"], errors='coerce')
+        
+        # Harmonisation du code département dès le chargement
         df_loaded = df_loaded.rename(columns={"Code du département de l'établissement": "dept_code"})
-        df_loaded["dept_code"] = df_loaded["dept_code"].astype(str).str.zfill(2)
+        df_loaded["dept_code"] = df_loaded["dept_code"].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(2)
+        
         return df_loaded
     except Exception as e:
         st.error(f"Erreur S3 : {e}")
@@ -38,11 +43,11 @@ else:
         st.session_state['df'] = df
         status.update(label="Cartographie prête !", state="complete")
 
+# Sécurité : On s'assure que le format est bien du texte sur 2 caractères (gestion des catégories)
 col_brute = "Code du département de l'établissement"
 if col_brute in df.columns:
     df = df.rename(columns={col_brute: "dept_code"})
 
-# On s'assure que le format est bien du texte sur 2 caractères
 if "dept_code" in df.columns:
     df["dept_code"] = df["dept_code"].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(2)
 
@@ -96,7 +101,7 @@ with st.chat_message("assistant"):
     
     col_stable, col_fragile = st.columns(2)
     
-    # Préparation des données métropole
+    # Préparation des données métropole (on exclut les codes longs type DOM-TOM pour le top 3)
     df_metro = df_dept_stats[df_dept_stats["dept_code"].str.len() <= 2].copy()
     
     with col_stable:
@@ -162,7 +167,7 @@ with tab1:
 
         top_mat = df_resilience[df_resilience["dept_code"].str.len() <= 2].sort_values("taux_vieux", ascending=False).head(3)
         st.write(f"💡 **Note :** La moyenne nationale de maturité est de **{moy_maturite:.1f}%**. Les tissus les plus ancrés se trouvent en : " + 
-                 ", ".join([f"**Dept {r['dept_code']}** ({r['taux_vieux']}%)" for _, r in top_mat.iterrows()]))
+                  ", ".join([f"**Dept {r['dept_code']}** ({r['taux_vieux']}%)" for _, r in top_mat.iterrows()]))
 
 with tab2:
     with st.container(border=True):
@@ -184,7 +189,7 @@ with tab2:
 
         top_life = df_life[df_life["dept_code"].str.len() <= 2].sort_values("age_estime", ascending=False).head(3)
         st.write(f"⏳ **Analyse :** En moyenne, une entreprise ferme après **{moy_longevite:.1f} ans** d'existence. Record de longévité constaté en : " + 
-                 ", ".join([f"**Dept {r['dept_code']}** ({r['age_estime']:.1f} ans)" for _, r in top_life.iterrows()]))
+                  ", ".join([f"**Dept {r['dept_code']}** ({r['age_estime']:.1f} ans)" for _, r in top_life.iterrows()]))
 
 st.divider()
 
@@ -201,22 +206,30 @@ with st.container(border=True):
         dep_cible = st.selectbox("📍 Département", options=sorted(df["dept_code"].unique()))
     
     with c_sec:
-        df_dep_only = df[df["dept_code"] == dep_cible]
-        secteurs = df_dep_only[['code_ape', 'libelle_section_ape']].drop_duplicates().dropna().assign(
-            label = lambda x: x["code_ape"].astype(str) + " – " + x["libelle_section_ape"]
-        ).sort_values("label")
+        df_dep_only = df[df["dept_code"] == dep_cible].copy()
+        
+        secteurs_df = df_dep_only[['code_ape', 'libelle_section_ape']].drop_duplicates().dropna()
+        secteurs_df["label"] = secteurs_df["code_ape"].astype(str) + " – " + secteurs_df["libelle_section_ape"].astype(str)
+        secteurs = secteurs_df.sort_values("label")
+        
         secteur_choisi = st.selectbox("🏭 Secteur d'activité", options=["Tous Secteurs"] + secteurs["label"].tolist())
 
     df_loc = df_dep_only.copy()
     if secteur_choisi != "Tous Secteurs":
-        df_loc = df_loc[df_loc["code_ape"] == secteur_choisi.split(" – ")[0]]
+
+        ape_code_extract = secteur_choisi.split(" – ")[0]
+        df_loc = df_loc[df_loc["code_ape"].astype(str) == ape_code_extract]
 
     if not df_loc.empty:
 
         df_loc["code_ape_clean"] = df_loc["code_ape"].astype(str).replace(r'\.0$', '', regex=True)
-        df_loc["age_entier"] = df_loc["age_estime"].fillna(0).round(0)
+
+        df_loc["age_hover"] = df_loc["age_estime"].fillna(0).round(0).astype(int)
+
         df_loc["effectif_val"] = df_loc["Tranche_effectif_num"].fillna(1)
+        df_loc["effectif_hover"] = df_loc["effectif_val"].astype(int)
         
+        # Calculs des metrics
         t_loc = ((df_loc["fermeture"].mean() * 100) / nb_annees).round(2)
         s_loc = round(df_loc[df_loc["fermeture"] == 1]["age_estime"].mean(), 1) if not df_loc[df_loc["fermeture"] == 1].empty else 0
 
@@ -224,24 +237,38 @@ with st.container(border=True):
             st.metric("Établissements", f"{len(df_loc):,}", help="Nombre total d'unités légales identifiées sur cette zone.")
 
         # --- AJOUT CONVIVIALITÉ : NOTE DE SYNTHÈSE ---
-        st.info(f"💡 **Analyse locale :** Dans le département **{dep_cible}**, le secteur **{secteur_choisi.split(' – ')[-1] if secteur_choisi != 'Tous Secteurs' else 'global'}** affiche une durée de vie moyenne de **{s_loc} ans**. Explorez les points ci-dessous pour voir les détails par établissement.")
+        st.info(
+            f"💡 **Analyse locale :** Dans le département **{dep_cible}**, "
+            f"le secteur **{secteur_choisi.split(' – ')[-1] if secteur_choisi != 'Tous Secteurs' else 'global'}** "
+            f"affiche une durée de vie moyenne de **{s_loc:.1f} ans**. "
+            f"Explorez les points ci-dessous pour voir les détails par établissement."
+        )
 
         # Carte
         fig_mapbox = px.scatter_mapbox(
-            df_loc, lat="latitude", lon="longitude", 
-            color="age_estime", size="effectif_val",
+            df_loc, 
+            lat="latitude", 
+            lon="longitude", 
+            color="age_estime", 
+            size="effectif_val",
             color_continuous_scale="Viridis", 
             size_max=12, 
             hover_name="Dénomination",
-            hover_data={
-                "age_entier": True, "code_ape_clean": True, "effectif_val": True,
-                "latitude": False, "longitude": False, "age_estime": False
-            },
-            mapbox_style="carto-positron", zoom=9, height=650
+            custom_data=["age_hover", "code_ape_clean", "effectif_hover"],
+            mapbox_style="carto-positron", 
+            zoom=8, 
+            height=650
         )
 
+        # 3. Template de Hover (0=age, 1=APE, 2=Effectif)
         fig_mapbox.update_traces(
-            hovertemplate="<b>%{hovertext}</b><br>Effectif: %{customdata[2]}<br>Âge: %{customdata[0]} ans<br>APE: %{customdata[1]}<extra></extra>"
+            hovertemplate=(
+                "<b>%{hovertext}</b><br>"
+                "Effectif : %{customdata[2]}<br>"
+                "Âge : %{customdata[0]} ans<br>"
+                "APE : %{customdata[1]}"
+                "<extra></extra>"
+            )
         )
 
         fig_mapbox.update_layout(
@@ -253,9 +280,9 @@ with st.container(border=True):
                     f"<span style='font-size:16px; font-weight:bold; color:#1f2937;'>📍 DEPT {dep_cible}</span><br>"
                     f"<span style='font-size:4px;'> </span><br>" 
                     f"<span style='font-size:13px; color:#4b5563;'>Rotation :</span> "
-                    f"<span style='font-size:13px; font-weight:bold; color:#1f2937;'>{t_loc}% /an</span><br>"
+                    f"<span style='font-size:13px; font-weight:bold; color:#1f2937;'>{t_loc:.2f}% /an</span><br>"
                     f"<span style='font-size:13px; color:#4b5563;'>Âge moyen :</span> "
-                    f"<span style='font-size:13px; font-weight:bold; color:#1f2937;'>{s_loc} ans</span><br>"
+                    f"<span style='font-size:13px; font-weight:bold; color:#1f2937;'>{s_loc:.1f} ans</span><br>"
                     f"<span style='font-size:13px; color:#4b5563;'>Établissements :</span> "
                     f"<span style='font-size:13px; font-weight:bold; color:#10b981;'>{len(df_loc):,}</span>"
                 ),

@@ -66,7 +66,7 @@ with st.container(border=True):
 
     mapping = {5499: "SARL", 5710: "SAS"}
 
-    color_map = {"SARL": "#627D98", "SAS": "#E63946"} 
+    color_map = {"SARL": "#4C759F", "SAS": "#6B2C6B"} 
 
     df_statuts = df_selection[df_selection["Catégorie juridique de l'unité légale"].isin([5499, 5710])].copy()
     df_statuts["statut_nom"] = df_statuts["Catégorie juridique de l'unité légale"].map(mapping)

@@ -39,23 +39,36 @@ def load_s3_image(file_key_name):
             return Image.open(io.BytesIO(f.read()))
     except Exception: return None
 
-# --- 3. CHARGEMENT AVEC STATUS  ---
+# --- 3. CHARGEMENT AVEC STATUS ---
 
 if 'df' not in st.session_state:
     with st.status("🔮 Initialisation de l'Observatoire...", expanded=False) as status:
         st.write("Connexion au bucket S3...")
-        st.session_state['df'] = load_s3_file("AWS_FILE_PATH")
-        
-        st.write("Chargement des modèles prédictifs...")
-        st.session_state['df_preds'] = load_s3_file("AWS_PREDS_PATH")
-        
-        st.write("Récupération de l'identité visuelle...")
-        st.session_state['user_photo'] = load_s3_image("AWS_MY_PHOTO_PATH")
 
-        st.write("✅ Tous les modules sont opérationnels.")
-        st.write(f"📊 {len(st.session_state['df']):,} lignes indexées.")
+        master_data = load_s3_file("AWS_FILE_PATH")
         
-        status.update(label="Système prêt !", state="complete")
+        if master_data is not None:
+            st.write("Calcul des univers d'analyse...")
+
+            st.session_state['df'] = master_data
+
+            df_active = master_data[master_data['Statut_Expert'] != '⚫ FERMÉ'].copy()
+
+            if 'Statut_Expert' in df_active.columns:
+                df_active['Statut_Expert'] = df_active['Statut_Expert'].cat.remove_unused_categories()
+            
+            st.session_state['df_preds'] = df_active
+
+            st.write("Récupération de l'identité visuelle...")
+            st.session_state['user_photo'] = load_s3_image("AWS_MY_PHOTO_PATH")
+
+            st.write("✅ Tous les modules sont opérationnels.")
+            st.write(f"📊 {len(master_data):,} entreprises indexées.")
+            
+            status.update(label="Système prêt !", state="complete")
+        else:
+            status.update(label="⚠️ Erreur : Impossible de charger le fichier Master", state="error")
+            st.error("Vérifiez la configuration de la clé AWS_FILE_PATH dans vos secrets.")
 
 # --- 4. BARRE LATÉRALE ---
 with st.sidebar:

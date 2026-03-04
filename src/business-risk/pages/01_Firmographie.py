@@ -38,7 +38,7 @@ if 'df' not in st.session_state or st.session_state['df'] is None:
         df = load_data_fallback()
         if df is not None:
             st.session_state['df'] = df
-            st.write("Analyse des fichiers Parquet effectuée.")
+            st.write("Analyse du fichier Parquet effectuée.")
             status.update(label="Données synchronisées avec succès !", state="complete", expanded=False)
         else:
             status.update(label="Échec de la connexion", state="error")
@@ -85,7 +85,7 @@ with st.container(border=True):
         st.success("""
         * 🎯 **Données qualifiée :** Base contrôlée (Pappers/INSEE).
         * ⚖️ **Rigueur :** Historique consolidé depuis **2008**.
-        * 📉 **Sémantique :** Étude des causes de fermeture.
+        * 📉 **Sémantique :** Étude des conditions de fermeture.
         """)
 
 # --- 4. CALCULS & KPI (Design : Metrics alignées) ---
@@ -119,16 +119,24 @@ with st.container(border=True):
     
     fig_age = px.histogram(
         df_plot, x="age_estime", color="Statut", barmode="group",
-        color_discrete_map={"Ouvertes": "#2ecc71", "Fermées": "#E63946"}, 
+        color_discrete_map={"Ouvertes": "#178F49", "Fermées": "#FFFFFF"}, 
         category_orders={"Statut": ["Ouvertes", "Fermées"]},
-        labels={"age_estime": "Âge de l'entreprise", "count": "Nombre d'entités"},
         template='plotly_white', height=400
     )
     
+    # --- PERSONNALISATION AVANCÉE DU HOVER ET DES AXES ---
+    fig_age.update_traces(
+
+        hovertemplate="<b>Âge :</b> %{x} ans<br><b>Total :</b> %{y} entités<extra></extra>"
+    )
+
     fig_age.update_layout(
         margin=dict(l=20, r=20, t=10, b=20),
         legend_title_text="Statut",
-        hovermode="x unified"
+        hovermode="x unified",
+        xaxis_title="Âge de l'entreprise (en années)",
+        yaxis_title="",
+        bargap=0.1
     )
     
     st.plotly_chart(fig_age, use_container_width=True)
@@ -157,14 +165,16 @@ with st.container(border=True):
 
     # --- Création du Graphique ---
     fig_proba = go.Figure()
+    
     fig_proba.add_trace(go.Scatter(
         x=df_age_events["age_estime"], 
         y=df_age_events["proba_fermeture"],
         mode="lines+markers", 
-        line=dict(width=4, color='#E63946'),
+        line=dict(width=4, color='#E67E22'),
         fill='tozeroy', 
         fillcolor='rgba(230, 57, 70, 0.1)',
-        name="Risque statistique"
+        name="Risque statistique",
+        hovertemplate="<b>Âge :</b> %{x} ans<br><b>Risque :</b> %{y:.1f}%<extra></extra>"
     ))
     
     fig_proba.update_layout(
@@ -173,7 +183,8 @@ with st.container(border=True):
         margin=dict(l=20, r=20, t=30, b=20),
         xaxis_title="Âge de l'entreprise (années)",
         yaxis_title="Risque de fermeture (%)",
-        hovermode="x unified"
+        hovermode="x unified",
+        yaxis=dict(rangemode="tozero")
     )
     
     st.plotly_chart(fig_proba, use_container_width=True)
@@ -218,7 +229,8 @@ with st.container(border=True):
             template='plotly_white', 
             height=400,
             labels={"value": "Nombre de fermetures", "Mois": "Mois de l'année"},
-            color_discrete_sequence=["#627D98", "#E63946"]
+            # Palette "Deep Ocean" : contraste marqué, professionnel et dynamique
+            color_discrete_sequence = ["#4C759F", "#94A3B8", "#6B2C6B"]
         )
         
         fig_comp.update_layout(
