@@ -79,12 +79,11 @@ with st.sidebar:
         st.caption("• SAS & SARL France\n• Bilans Publics\n• 2008-2026")
     
     st.divider()
-    st.markdown("`Python 3.12` | `XGBoost` | `Docker` | `S3` ")
 
 # --- 5. CONTENU PRINCIPAL ---
 with st.container(border=True):
 
-    col1, col2 = st.columns([1, 2.5], gap="large")
+    col1, col2 = st.columns([1, 4], gap="large")
     
     with col1:
  
@@ -97,59 +96,98 @@ with st.container(border=True):
             st.info("Photo Provider")
         
         st.subheader("Joël TERMONDJIAN")
-        st.markdown("🎓 **Expert Bancaire & Data Analyst**")
-        st.caption("⚡ 20 ans d'expertise en gestion du risque")
+        st.markdown("🎓 **20 ans d'Expertise Bancaire & Data Analyst**")
 
     with col2:
 
-        st.markdown("<h1 style='margin-top:0;'>🚀 Observatoire des Fermetures</h1>", unsafe_allow_html=True)
+        st.markdown("<h1 style='margin-top:0;'>🛡️ Bouclier Entreprises : SAS & SARL</h1>", unsafe_allow_html=True)
+        st.markdown("### **Intelligence Risque & Sauvegarde du Tissu Économique**")
         
-        st.markdown("### *'Le scoring doit refléter la réalité du terrain et ne plus être une boîte noire.'*")
+        st.markdown("### *« Le scoring doit être un levier d'accompagnement et non pas une sentence. »*")
         
         st.write("""
-        Deux décennies au cœur de l'octroi de crédits me permettent de constater que les outils standards 
-        manquent souvent de finesse pour capter la trajectoire réelle d'une entreprise.
-        """)
+    Fort de deux décennies dans l'octroi de crédits, j'ai conçu cet outil pour combler le fossé 
+    entre la donnée brute et la réalité du terrain. 
+    **Sa mission est triple :**
+    """)
 
         with st.container():
             p1, p2, p3 = st.columns(3)
-            p1.info("**Démocratiser**\nLa donnée haute fidélité.")
-            p2.success("**Transformer**\nLe complexe en levier.")
-            p3.warning("**Anticiper**\n pour sortir de l'historique.")
+            p1.info("**🏦 Banques**\n\nOptimiser le risque relationnel et anticiper les défauts pour **protéger son PNB**.")
+            p2.success("**📊 Comptables**\n\nCibler les dossiers critiques pour transformer le risque client en **mission d'accompagnement à haute valeur ajoutée**.")
+            p3.warning("**🏛️ Institutions**\n\nAppuyer les décisions macro pour limiter les fermetures et **soutenir l'économie**.")
 
 st.divider()
 
 # Section avec Onglets
 tab1, tab2 = st.tabs(["🎯 Ma Vision de l'Analyse", "🛠️ Stack & Engagement"])
 
-with tab1:
-    st.markdown("#### Une analyse structurée pour des décisions éclairées")
 
+with tab1:
+    st.markdown("#### 🔍 Les 4 Piliers de l'Analyse Structurelle")
+    
+    # --- LES 4 ITEMS ---
+    p1, p2, p3, p4 = st.columns(4)
+    
+    with p1:
+        with st.container(border=True):
+            st.markdown("#### ⏳ Ancienneté")
+            st.write("**Maturité & Survie**")
+            st.caption("Dépasser le 'Cap des 3 ans' : analyse de la courbe de survie critique.")
+    
+    with p2:
+        with st.container(border=True):
+            st.markdown("#### 🏭 Secteurs")
+            st.write("**Dynamiques Métiers**")
+            st.caption("Cycles de défaillance spécifiques et identification des secteurs sous tension.")
+
+    with p3:
+        with st.container(border=True):
+            st.markdown("#### ⚖️ Structure")
+            st.write("**Poids de l'Entité**")
+            st.caption("L'impact de la forme juridique et des effectifs sur la résilience réelle.")
+
+    with p4:
+        with st.container(border=True):
+            st.markdown("#### 📍 Territoire")
+            st.write("**Écosystème Local**")
+            st.caption("Analyse des clusters : pourquoi certains départements résistent mieux ?")
+
+    st.info("""
+    **En bref :** Mon approche balaye les signaux faibles qui précipitent réellement la fermeture. 
+    L'analyse ne se limite pas aux chiffres comptables, elle décortique la structure même de l'entreprise.
+    """)
+
+    st.divider()
+
+    # --- ANALYSE & SCORING (Plus petits en bas) ---
+    st.markdown("##### ⚙️ Méthodologie & Objectifs")
     c1, c2 = st.columns(2, gap="medium")
     
     with c1:
         with st.container(border=True):
-
-            st.markdown("### 📊 ANALYSE")
-            st.markdown("""
-            **Rétrospective & Sectorielle**
-            * Comprendre les cycles depuis 2008.
-            * Décrypter les fragilités métiers.
+            st.markdown("###### 📊 Analyse Rétrospective")
+            st.caption("""
+            **Comprendre le passé.**
+            - Étude des cycles depuis 2008.
+            - Secteurs "atypiques" post-COVID.
+            - Pipeline ETL robuste (Data INPI).
             """)
             
     with c2:
         with st.container(border=True):
-            st.markdown("### 🔮 PROSPECTIVE")
-            st.markdown("""
-            **Territoriale & Prédictive**
-            * Zoom départemental haute précision.
-            * Scoring de risque à 3 ans (XGBoost).
+            st.markdown("###### 🔮 Scoring Prédictif")
+            st.caption("""
+            **Anticiper l'avenir.**
+            - Variables réelles (Effectifs, Âge).
+            - Horizon de risque à 3 ans.
+            - Aide à la décision préventive.
             """)
 
 with tab2:
     with st.container(border=True):
         st.markdown("""
-        **🚀 Engagement de développement**
+        **🚀 Engagement de développement** :
         L'outil évolue en continu. Prochaine étape : intégration d'un moteur prédictif 
         interactif et d'une couche d'analyse financière approfondie via API.
         """)

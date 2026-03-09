@@ -37,7 +37,7 @@ with st.sidebar:
     st.caption("Cela permet d'isoler le flux de dégradation futur du stock de risque actuel.")
 
 # --- TITRE PRINCIPAL ---
-st.title("🔮 5. Mes projections territoriales de 1 à 3 ans")
+st.title("🔮 5. Projections territoriales de 1 à 3 ans")
 
 # --- BLOC MÉTHODOLOGIQUE COMPLET ---
 with st.container(border=True):

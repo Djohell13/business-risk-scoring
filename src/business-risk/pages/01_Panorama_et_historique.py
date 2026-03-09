@@ -67,7 +67,11 @@ with st.sidebar:
     st.caption(f"🌍 **Base de données :** {len(df_selection):,} établissements")
 
 # --- 3. ENTÊTE (Design : Utilisation de colonnes et containers) ---
-st.title("📊 1. État des lieux & Périmètre")
+st.title("📊 1. Panorama & Dynamiques Historiques")
+st.markdown("""
+Cette section analyse la trajectoire des fermetures d'entreprises sur les deux dernières décennies 
+pour identifier les cycles de rupture et définir notre périmètre d'intervention.
+""")
 
 with st.container(border=True):
     col_a, col_b = st.columns([1, 1], gap="large")
@@ -206,19 +210,24 @@ with st.container(border=True):
 st.subheader("📅 Dynamique mensuelle et comparaison annuelle")
 
 with st.container(border=True):
-
     st.markdown("""
     Cette analyse permet de visualiser si les fermetures s'accélèrent ou ralentissent d'un mois sur l'autre par rapport aux années précédentes. 
-    Les pourcentages affichés au-dessus des barres indiquent la **variation annuelle** (ex: comparaison de Mars 2025 vs Mars 2024).
     """)
 
+    # 1. Filtrage strict des données
     df_comp = df_selection[(df_selection["fermeture"] == 1) & (df_selection["Date_fermeture_finale"].notna())].copy()
     
     if not df_comp.empty:
-        df_pivot = (
-            df_comp.assign(Année=df_comp["Date_fermeture_finale"].dt.year, Mois=df_comp["Date_fermeture_finale"].dt.month)
-            .query("Année >= 2023")
-            .pivot_table(index="Mois", columns="Année", values="fermeture", aggfunc="count", fill_value=0)
+  
+        df_comp['Année'] = df_comp["Date_fermeture_finale"].dt.year
+        df_comp['Mois'] = df_comp["Date_fermeture_finale"].dt.month
+
+
+        mask_incomplet = (df_comp['Année'] == 2025) & (df_comp['Mois'] >= 10)
+        df_clean = df_comp[~mask_incomplet].query("Année >= 2023")
+
+        df_pivot = df_clean.pivot_table(
+            index="Mois", columns="Année", values="fermeture", aggfunc="count", fill_value=0
         )
         
         mois_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
@@ -228,8 +237,7 @@ with st.container(border=True):
             barmode='group', 
             template='plotly_white', 
             height=400,
-            labels={"value": "Nombre de fermetures", "Mois": "Mois de l'année"},
-            # Palette "Deep Ocean" : contraste marqué, professionnel et dynamique
+            labels={"value": "Nombre de fermetures", "Mois": "Mois"},
             color_discrete_sequence = ["#4C759F", "#94A3B8", "#6B2C6B"]
         )
         
@@ -242,8 +250,26 @@ with st.container(border=True):
         
         st.plotly_chart(fig_comp, use_container_width=True)
 
-        with st.expander("📝 Note sur la saisonnalité"):
-            st.write("Les pics observés en fin d'année correspondent majoritairement aux clôtures comptables (cessations volontaires ou fins de cycles fiscaux).")
+        # --- COMMENTAIRE DYNAMIQUE (Logique 2023 vs 2024) ---
+        if 2023 in df_pivot.columns and 2024 in df_pivot.columns:
+            total_23 = df_pivot[2023].sum()
+            total_24 = df_pivot[2024].sum()
+            var_23_24 = ((total_24 - total_23) / total_23) * 100
+            
+            # Analyse courte pour 2025
+            msg_2025 = ""
+            if 2025 in df_pivot.columns:
+                total_25_sept = df_pivot[2025].sum()
+                msg_2025 = f" Sur les 9 premiers mois de **2025**, on recense déjà **{total_25_sept}** fermetures."
 
+            st.markdown(f"""
+            > **Analyse du flux :** Le volume de fermetures a évolué de **{var_23_24:+.1f}%** entre 2023 et 2024.{msg_2025}
+            """)
+
+        with st.expander("📝 Note sur la saisonnalité et les données"):
+            st.write("""
+            * Les données 2025 sont arrêtées au **30 septembre** pour garantir l'intégrité de l'analyse (données INPI en cours de traitement pour le T4).
+            * Les pics de fin d'année (visibles en 2023/2024) sont structurels et liés aux régularisations administratives de fin d'exercice.
+            """)
 st.divider()
 st.caption("ℹ️ Source : Base SIRENE & Bilans Publics | Focus méthodologique : SAS & SARL.")
