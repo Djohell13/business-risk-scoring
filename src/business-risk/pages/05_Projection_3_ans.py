@@ -37,7 +37,7 @@ with st.sidebar:
     st.caption("Cela permet d'isoler le flux de dégradation futur du stock de risque actuel.")
 
 # --- TITRE PRINCIPAL ---
-st.title("🔮 5. Projections territoriales de 1 à 3 ans")
+st.title("🔮 5. Horizon 2026-2029 : Pilotage de la Résilience Territoriale .")
 
 # --- BLOC MÉTHODOLOGIQUE COMPLET ---
 with st.container(border=True):
@@ -88,7 +88,8 @@ with st.container(border=True):
 
     with col_pedago2:
         st.markdown("🌡️ **Le Seuil de 10%**")
-        st.markdown("C'est notre <b>barre d'alerte</b>. Au-delà, l'entreprise entre en zone de fragilité critique.", unsafe_allow_html=True)
+        st.markdown("C'est notre **filtre de basculement**. Toute entreprise dépassant cette probabilité est comptabilisée dans le **Volume** des alertes et impacte directement" \
+        " la carte.", unsafe_allow_html=True)
 
     with col_pedago3:
         st.markdown("🌊 **L'Effet de Vague**")

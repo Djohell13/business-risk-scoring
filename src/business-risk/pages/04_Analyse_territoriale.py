@@ -73,24 +73,53 @@ df_dept_stats = df.groupby("dept_code").agg(taux_brut=("fermeture", "mean")).res
 df_dept_stats["taux_pct"] = ((df_dept_stats["taux_brut"] * 100) / nb_annees).round(2)
 moy_nat_annuelle = ((df["fermeture"].mean() * 100) / nb_annees)
 
+# --- CALCUL DES BORNES DYNAMIQUES (PERCENTILES 5-95) ---
+vmin = df_dept_stats["taux_pct"].quantile(0.05)
+vmax = df_dept_stats["taux_pct"].quantile(0.95)
+
 st.subheader("📍 Indice de Fermeture annuelle par département")
 
 with st.container(border=True):
     st.markdown(f"**Moyenne Nationale : {moy_nat_annuelle:.2f}%**")
     if geojson_france:
 
+        nuanced_scale = [
+            [0.0, "#1E3A8A"], 
+            [0.3, "#93C5FD"], 
+            [0.5, "#FFFFFF"], 
+            [0.7, "#FDBA74"],  
+            [1.0, "#B91C1C"]   
+        ]
+
+        # --- CRÉATION DE LA CARTE ---
         fig_map = px.choropleth(
             df_dept_stats, geojson=geojson_france, locations="dept_code",
-            featureidkey="properties.code", color="taux_pct", 
-            color_continuous_scale="RdBu_r", 
-            color_continuous_midpoint=moy_nat_annuelle, 
-            scope="europe", height=600
+            featureidkey="properties.code", color="taux_pct",
+            color_continuous_scale=nuanced_scale, 
+            range_color=[vmin, vmax], 
+            scope="europe", height=600,
+            custom_data=[df_dept_stats["taux_pct"].round(2)]
         )
+
         fig_map.update_geos(fitbounds="locations", visible=False)
+
+        # --- HOVER & MISE EN PAGE ---
         fig_map.update_traces(
-            hovertemplate="<b>Département %{location}</b><br>Taux de fermeture : %{z:.2f}%<extra></extra>"
+            hovertemplate="<b>Département %{location}</b><br>Taux de fermeture : %{customdata[0]:.2f}%<extra></extra>"
         )
-        fig_map.update_layout(margin={"r":0, "t":0, "l":0, "b":0}, coloraxis_colorbar=dict(title="%"))
+
+        # --- CONFIGURATION DE LA BARRE DE COULEUR ---
+        fig_map.update_layout(
+            margin={"r":0, "t":0, "l":0, "b":0},
+            coloraxis_colorbar=dict(
+                title="Taux (%)",
+                yanchor="middle", y=0.5,
+                ticks="outside",
+                tickvals=[vmin, moy_nat_annuelle, vmax],
+                ticktext=[f"Sain ({vmin:.1f}%)", "Moyenne", f"Alerte ({vmax:.1f}%)"],
+                len=0.7 
+            )
+        )
         st.plotly_chart(fig_map, use_container_width=True)
 
 # --- ANALYSE DES DISPARITÉS (Version Cards) ---
