@@ -22,7 +22,7 @@ if 'df_preds' in st.session_state:
     df_proj["dep_code"] = df_proj["Code du département de l'établissement"].astype(str).str.strip().str.zfill(2)
     df_proj = df_proj[~df_proj["dep_code"].str.startswith('97')]
 else:
-    st.warning("⚠️ Données non chargées.")
+    st.warning("⚠️ Données non chargées, veuillez consulter l'onglet 'Expertise et vision' d'abord.")
     st.stop()
 
 # --- SIDEBAR : DÉFINITIONS ---

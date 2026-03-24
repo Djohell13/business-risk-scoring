@@ -188,7 +188,6 @@ with tab2:
     with st.container(border=True):
         st.markdown("""
         **🚀 Engagement de développement** :
-        L'outil évolue en continu. Prochaine étape : intégration d'un moteur prédictif 
-        interactif et d'une couche d'analyse financière approfondie via API.
+        L'outil évolue en continu. Prochaine étape : intégration d'une couche d'analyse financière approfondie via API.
         """)
     st.caption("✨ Je vous invite à explorer cet outil conçu pour les professionnels exigeants.")
