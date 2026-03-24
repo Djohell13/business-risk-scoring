@@ -42,7 +42,7 @@ def load_s3_image(file_key_name):
 # --- 3. CHARGEMENT AVEC STATUS ---
 
 if 'df' not in st.session_state:
-    with st.status("🔮 Initialisation de l'Observatoire...", expanded=False) as status:
+    with st.status("🔮 Initialisation des données...", expanded=False) as status:
         st.write("Connexion au bucket S3...")
 
         master_data = load_s3_file("AWS_FILE_PATH")
@@ -100,8 +100,7 @@ with st.container(border=True):
 
     with col2:
 
-        st.markdown("<h1 style='margin-top:0;'>🛡️ Bouclier Entreprises : SAS & SARL</h1>", unsafe_allow_html=True)
-        st.markdown("### **Intelligence Risque & Sauvegarde du Tissu Économique**")
+        st.markdown("<h1 style='margin-top:0;'>🛡️ Soutenir et Protéger notre économie</h1>", unsafe_allow_html=True)
         
         st.markdown("### *« Le scoring doit être un levier d'accompagnement et non pas une sentence. »*")
         

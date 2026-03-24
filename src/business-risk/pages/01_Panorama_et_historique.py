@@ -146,7 +146,10 @@ with st.container(border=True):
     st.plotly_chart(fig_age, use_container_width=True)
 
     with st.chat_message("assistant"):
-        st.write(f"**Analyse :** On observe la fameuse 'vallée de la mort' entre 2 et 5 ans. L'âge moyen ({age_moyen:.1f} ans) est un indicateur de fragilité structurelle précoce.")
+        st.markdown(f"""
+        **Analyse :** On observe un **pic de sinistralité** entre 2 et 5 ans, phase charnière dite de la 'vallée de la mort'. 
+        L'âge moyen ({age_moyen:.1f} ans) souligne une **fragilité structurelle précoce** et une difficulté à pérenniser les structures au-delà du premier cycle de croissance.
+        """)
 # --- Graphique 2 : Probabilité ---
 st.subheader("📈 Dynamique du risque : Taux de fermeture par âge")
 
@@ -198,12 +201,17 @@ with st.container(border=True):
     if not df_age_events.empty:
         peak_risk = df_age_events.loc[df_age_events['proba_fermeture'].idxmax()]
         
+        # On prépare le texte selon l'âge du pic
+        if peak_risk['age_estime'] < 1:
+            age_text = "dès la phase de lancement (première année)"
+        else:
+            age_text = f"à **{peak_risk['age_estime']:.0f} ans**"
+
         with st.chat_message("assistant"):
             st.markdown(f"""
-            **Lecture du risque :** La courbe montre que le risque de fermeture atteint son maximum à **{peak_risk['age_estime']:.0f} ans** (taux de **{peak_risk['proba_fermeture']:.1f}%**). 
-            
-            Passé ce cap de maturité, on observe généralement une **décroissance du risque**, signe d'une résilience structurelle acquise. 
-            C'est ce qu'on appelle la courbe d'apprentissage du marché.
+            **Lecture du risque :** La courbe montre que l'exposition critique au risque se situe **{age_text}**, avec un taux de fermeture estimé à **{peak_risk['proba_fermeture']:.1f}%**. 
+
+            Passé ce cap de consolidation, on observe une **décroissance progressive du risque** : c'est la phase de résilience structurelle. L'entreprise bénéficie alors de son **effet d'apprentissage** et d'une meilleure assise sur son marché.
             """)
 
 # Graphique 3 : Mensuel 
