@@ -67,9 +67,9 @@ with st.sidebar:
     st.caption(f"🌍 **Base de données :** {len(df_selection):,} établissements")
 
 # --- 3. ENTÊTE (Design : Utilisation de colonnes et containers) ---
-st.title("📊 1. Panorama & Dynamiques Historiques")
+st.title("📊 1. Historiques & Dynamiques")
 st.markdown("""
-Cette section analyse la trajectoire des fermetures d'entreprises sur les deux dernières décennies 
+Cette section analyse la trajectoire des fermetures d'entreprises depuis 2008 
 pour identifier les cycles de rupture et définir notre périmètre d'intervention.
 """)
 
@@ -150,46 +150,66 @@ with st.container(border=True):
         **Analyse :** On observe un **pic de sinistralité** entre 2 et 5 ans, phase charnière dite de la 'vallée de la mort'. 
         L'âge moyen ({age_moyen:.1f} ans) souligne une **fragilité structurelle précoce** et une difficulté à pérenniser les structures au-delà du premier cycle de croissance.
         """)
-# --- Graphique 2 : Probabilité ---
-st.subheader("📈 Dynamique du risque : Taux de fermeture par âge")
+
+# --- SYNTHÈSE PÉDAGOGIQUE ---
+st.info("""
+    💡 **Important : Volume vs Intensité**
+    
+    Il n'y a pas de contradiction entre les visuels de cette page, mais une **double lecture du risque** :
+    
+    1. **Le Volume (Graphique ci-dessus) :** Les fermetures sont numériquement plus nombreuses entre 2 et 5 ans. C'est la **mortalité infantile** : un effet de masse dû au grand nombre de créations récentes.
+    2. **L'Intensité (Graphique ci-dessous) :** Le risque statistique individuel peut remonter après 25 ans. C'est la **mortalité de maturité** : elle ne concerne plus la gestion courante, mais les enjeux de **transmission** ou de fin de cycle.
+    
+    **En résumé :** On passe d'une fragilité de **jeunesse** (le nombre) à une fragilité de **maturité** (la probabilité).
+    """)
+
+# --- Graphique 2 : Probabilité (Version Risque Réel) ---
+st.subheader("📈 Dynamique de fermeture : l'indice de vulnérabilité par âge")
 
 with st.container(border=True):
     st.markdown("""
     Ce graphique mesure la **fragilité relative** des entreprises. 
-    Il répond à la question : *Si l'entreprise a X années, quel est son risque statistique de fermer dans l'année ?*
+    Il répond à la question : *Si l'entreprise a atteint l'âge X, quel est son risque statistique de fermer dans l'année qui suit ?*
     """)
     
-    # --- Logique de données ---
-    df_age_events = (
-        df_selection.loc[df_selection["age_estime"].ge(0)]
-        .assign(age_estime=lambda x: x["age_estime"].astype(int))
-        .groupby("age_estime")["fermeture"]
-        .agg(fermetures="sum", observations="count")
-        .assign(proba_fermeture=lambda x: (x["fermetures"] / x["observations"]) * 100)
-        .reset_index()
-    )
-    df_age_events = df_age_events[df_age_events["age_estime"] <= 35]
+    # --- Nouvelle Logique de Calcul : Taux de Hasard ---
+    def calculate_hazard_rate(df_input):
+        data_list = []
+
+        for age in range(36):
+   
+            fermetures_age = len(df_input[(df_input["age_estime"] == age) & (df_input["fermeture"] == 1)])
+
+            exposes = len(df_input[df_input["age_estime"] >= age])
+            
+            if exposes > 50: 
+                proba = (fermetures_age / exposes) * 100
+                data_list.append({"age_estime": age, "proba_fermeture": proba})
+        
+        return pd.DataFrame(data_list)
+
+    df_age_events = calculate_hazard_rate(df_selection)
 
     # --- Création du Graphique ---
     fig_proba = go.Figure()
     
-    fig_proba.add_trace(go.Scatter(
-        x=df_age_events["age_estime"], 
-        y=df_age_events["proba_fermeture"],
-        mode="lines+markers", 
-        line=dict(width=4, color='#E67E22'),
-        fill='tozeroy', 
-        fillcolor='rgba(230, 57, 70, 0.1)',
-        name="Risque statistique",
-        hovertemplate="<b>Âge :</b> %{x} ans<br><b>Risque :</b> %{y:.1f}%<extra></extra>"
-    ))
+    if not df_age_events.empty:
+        fig_proba.add_trace(go.Scatter(
+            x=df_age_events["age_estime"], 
+            y=df_age_events["proba_fermeture"],
+            mode="lines+markers", 
+            line=dict(width=4, color='#E67E22'),
+            fill='tozeroy', 
+            fillcolor='rgba(230, 126, 34, 0.1)',
+            name="Risque annuel",
+            hovertemplate="<b>Âge :</b> %{x} ans<br><b>Risque de fermeture :</b> %{y:.2f}%<extra></extra>"
+        ))
     
     fig_proba.update_layout(
         template="plotly_white", 
         height=400, 
         margin=dict(l=20, r=20, t=30, b=20),
         xaxis_title="Âge de l'entreprise (années)",
-        yaxis_title="Risque de fermeture (%)",
         hovermode="x unified",
         yaxis=dict(rangemode="tozero")
     )
@@ -200,19 +220,25 @@ with st.container(border=True):
 
     if not df_age_events.empty:
         peak_risk = df_age_events.loc[df_age_events['proba_fermeture'].idxmax()]
-        
-        # On prépare le texte selon l'âge du pic
-        if peak_risk['age_estime'] < 1:
-            age_text = "dès la phase de lancement (première année)"
-        else:
-            age_text = f"à **{peak_risk['age_estime']:.0f} ans**"
+        peak_age = peak_risk['age_estime']
+        peak_val = peak_risk['proba_fermeture']
 
         with st.chat_message("assistant"):
-            st.markdown(f"""
-            **Lecture du risque :** La courbe montre que l'exposition critique au risque se situe **{age_text}**, avec un taux de fermeture estimé à **{peak_risk['proba_fermeture']:.1f}%**. 
-
-            Passé ce cap de consolidation, on observe une **décroissance progressive du risque** : c'est la phase de résilience structurelle. L'entreprise bénéficie alors de son **effet d'apprentissage** et d'une meilleure assise sur son marché.
-            """)
+            if peak_age < 7:
+                st.markdown(f"""
+                **Analyse : Mortalité Infantile.** Le risque culmine à **{peak_age} ans** ({peak_val:.1f}%). 
+                C'est la phase critique de validation du modèle économique. Passé ce cap, la structure se consolide.
+                """)
+            elif peak_age > 25:
+                st.markdown(f"""
+                **Analyse : Risque de Fin de Cycle.** Le pic de défaillance apparaît tardivement, vers **{peak_age} ans** ({peak_val:.1f}%). 
+                Ce phénomène relate souvent des problématiques de **transmission d'entreprise** ou d'essoufflement du modèle historique après trois décennies d'activité.
+                """)
+            else:
+                st.markdown(f"""
+                **Analyse : Risque de Maturité.** Le pic se situe à **{peak_age} ans** ({peak_val:.1f}%). 
+                L'exposition au risque est ici liée au second cycle de croissance ou à un besoin de pivot stratégique.
+                """)
 
 # Graphique 3 : Mensuel 
 st.subheader("📅 Dynamique mensuelle et comparaison annuelle")

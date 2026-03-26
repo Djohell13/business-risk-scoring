@@ -104,7 +104,7 @@ with st.container(border=True):
     else:
         st.info("Aucune fermeture enregistrée sur ce périmètre.")
 
-# --- 5. COMPARATIF DU RISQUE ---
+# --- 5. COMPARATIF DU RISQUE (Version Risque Réel Sectoriel) ---
 st.subheader("⚖️ Comparatif du risque de fermeture")
 
 with st.container(border=True):
@@ -114,29 +114,43 @@ with st.container(border=True):
         secteurs_choisis = st.multiselect("🔍 Comparer les secteurs :", options=top_secteurs_list, default=[top_secteurs_list[0]])
 
         if secteurs_choisis:
+            # 1. On prépare une fonction de calcul par secteur
+            def calculate_sector_hazard(df_full, sectors):
+                all_results = []
+                for sector in sectors:
+                    df_s = df_full[df_full['libelle_section_ape'] == sector]
+                    for age in range(36):
+                        # Morts à cet âge dans ce secteur
+                        morts = len(df_s[(df_s["age_estime"] == age) & (df_s["fermeture"] == 1)])
+                        # Population exposée (vivants ou morts de cet âge ou plus)
+                        exposes = len(df_s[df_s["age_estime"] >= age])
+                        
+                        if exposes > 30: # Seuil un peu plus bas pour le détail sectoriel
+                            all_results.append({
+                                "Secteur": sector,
+                                "age_estime": age,
+                                "proba": (morts / exposes) * 100
+                            })
+                return pd.DataFrame(all_results)
 
-            df_stats_raw = df_selection[
-                df_selection['libelle_section_ape'].isin(secteurs_choisis) & 
-                df_selection["age_estime"].between(0, 35)
-            ].copy()
-            
-            df_stats_raw['libelle_section_ape'] = df_stats_raw['libelle_section_ape'].cat.remove_unused_categories()
+            # 2. Calcul des données
+            df_stats = calculate_sector_hazard(df_selection, secteurs_choisis)
 
-            df_stats = (
-                df_stats_raw.groupby(["libelle_section_ape", "age_estime"], observed=True)["fermeture"]
-                .agg(fermetures="sum", obs="count")
-                .assign(proba=lambda x: (x["fermetures"] / x["obs"]) * 100)
-                .reset_index()
-            )
-
-            fig_comp_risk = px.line(
-                df_stats, x="age_estime", y="proba", color="libelle_section_ape",
-                template="plotly_white", height=500,
-                labels={"age_estime": "Âge de l'entreprise", "proba": "Risque (%)", "libelle_section_ape": "Secteur"}
-            )
-            fig_comp_risk.update_traces(mode="lines", line=dict(width=3), hovertemplate="<b>%{fullData.name}</b><br>Âge : %{x} ans<br>Risque : %{y:.1f}%<extra></extra>")
-            fig_comp_risk.update_layout(legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"))
-            st.plotly_chart(fig_comp_risk, use_container_width=True)
+            # 3. Affichage du graphique
+            if not df_stats.empty:
+                fig_comp_risk = px.line(
+                    df_stats, x="age_estime", y="proba", color="Secteur",
+                    template="plotly_white", height=500,
+                    labels={"age_estime": "Âge de l'entreprise", "proba": "Risque annuel (%)"}
+                )
+                fig_comp_risk.update_traces(mode="lines", line=dict(width=3), hovertemplate="<b>%{fullData.name}</b><br>Âge : %{x} ans<br>Risque : %{y:.2f}%<extra></extra>")
+                fig_comp_risk.update_layout(
+                    legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"),
+                    yaxis=dict(rangemode="tozero")
+                )
+                st.plotly_chart(fig_comp_risk, use_container_width=True)
+            else:
+                st.warning("Données insuffisantes pour comparer ces secteurs avec cette rigueur statistique.")
 
 # --- 6. HEATMAP ---
 st.subheader("🌡️ Heatmap : Intensité des fermetures par mois (2024)")

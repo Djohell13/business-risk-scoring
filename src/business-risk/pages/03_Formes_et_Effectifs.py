@@ -65,7 +65,6 @@ with st.container(border=True):
     """)
 
     mapping = {5499: "SARL", 5710: "SAS"}
-
     color_map = {"SARL": "#4C759F", "SAS": "#6B2C6B"} 
 
     df_statuts = df_selection[df_selection["Catégorie juridique de l'unité légale"].isin([5499, 5710])].copy()
@@ -74,32 +73,47 @@ with st.container(border=True):
     def get_statut_data(data):
         return data["statut_nom"].value_counts().sort_index()
 
+    # 1. ORDRE DES DONNÉES : Parc Total (0), Fermées (1), Ouvertes (2)
     data_list = [
         get_statut_data(df_statuts),
-        get_statut_data(df_statuts[df_statuts["fermeture"] == 0]),
-        get_statut_data(df_statuts[df_statuts["fermeture"] == 1])
+        get_statut_data(df_statuts[df_statuts["fermeture"] == 1]),
+        get_statut_data(df_statuts[df_statuts["fermeture"] == 0])
     ]
 
-    fig_pie = make_subplots(rows=1, cols=3, specs=[[{'type':'domain'}]*3], 
-                             subplot_titles=["Parc Total", "Ouvertes", "Fermées"])
+    # 2. TITRES CORRESPONDANTS : On aligne les titres sur l'ordre de data_list
+    fig_pie = make_subplots(
+        rows=1, cols=3, 
+        specs=[[{'type':'domain'}]*3], 
+        subplot_titles=["Parc Total", "Fermées", "Ouvertes"]
+    )
 
     for i, data in enumerate(data_list, 1):
         if not data.empty:
+            # Sécurité pour les couleurs : on s'assure qu'elles suivent toujours les bons labels
+            current_colors = [color_map.get(l, "gray") for l in data.index]
+            
             fig_pie.add_trace(
                 go.Pie(
-                    labels=data.index, values=data.values, 
-                    marker=dict(colors=[color_map.get(l, "gray") for l in data.index]),
-                    textinfo='percent', hole=0.5,
+                    labels=data.index, 
+                    values=data.values, 
+                    marker=dict(colors=current_colors),
+                    sort=False, # Indispensable pour garder SARL et SAS à la même place sur les 3 donuts
+                    textinfo='percent', 
+                    hole=0.5,
                     hovertemplate="<b>%{label}</b><br>Volume : %{value}<extra></extra>"
                 ), row=1, col=i
             )
 
-    fig_pie.update_layout(height=400, margin=dict(t=50, b=0, l=0, r=0), showlegend=True, 
-                          legend=dict(orientation="h", y=-0.1, x=0.5, xanchor="center"))
+    fig_pie.update_layout(
+        height=400, 
+        margin=dict(t=50, b=0, l=0, r=0), 
+        showlegend=True, 
+        legend=dict(orientation="h", y=-0.1, x=0.5, xanchor="center")
+    )
     st.plotly_chart(fig_pie, use_container_width=True)
 
-    # Analyse Expert
-    fermes = data_list[2]
+    # 3. ANALYSE EXPERT : On pointe maintenant sur data_list[1] (les Fermées)
+    fermes = data_list[1] 
     if not fermes.empty and fermes.sum() > 0:
         top_statut = fermes.idxmax()
         pct_top = (fermes.max() / fermes.sum()) * 100
@@ -120,19 +134,26 @@ with st.container(border=True):
         "0": "0 salarié", "1": "1-2 sal.", "3": "3-5 sal.", 
         "6": "6-9 sal.", "10": "10-19 sal.", "20": "20-49 sal."
     }
+    
+    # On définit un ordre strict pour que les couleurs soient toujours aux mêmes tranches
     order = sorted(df_selection["Tranche_effectif_num"].unique())
 
     def get_eff_data(data):
         return data["Tranche_effectif_num"].value_counts().reindex(order, fill_value=0)
 
+    # 1. ORDRE DES DONNÉES : Parc Total (0), Fermées (1), Ouvertes (2)
     eff_data_list = [
         get_eff_data(df_selection),
-        get_eff_data(df_selection[df_selection["fermeture"] == 0]),
-        get_eff_data(df_selection[df_selection["fermeture"] == 1])
+        get_eff_data(df_selection[df_selection["fermeture"] == 1]), # Fermées en second
+        get_eff_data(df_selection[df_selection["fermeture"] == 0])  # Ouvertes en troisième
     ]
 
-    fig_eff = make_subplots(rows=1, cols=3, specs=[[{'type':'domain'}]*3],
-                             subplot_titles=["Parc Total", "Ouvertes", "Fermées"])
+    # 2. TITRES CORRESPONDANTS
+    fig_eff = make_subplots(
+        rows=1, cols=3, 
+        specs=[[{'type':'domain'}]*3],
+        subplot_titles=["Parc Total", "Fermées", "Ouvertes"]
+    )
 
     colors_scale = ["#D9E2EC", "#BCCCDC", "#9FB3C8", "#829AB1", "#627D98", "#486581"]
 
@@ -141,20 +162,27 @@ with st.container(border=True):
             labels_lisibles = [tranche_map.get(str(x), f"Tranche {x}") for x in data.index]
             fig_eff.add_trace(
                 go.Pie(
-                    labels=labels_lisibles, values=data.values, 
+                    labels=labels_lisibles, 
+                    values=data.values, 
                     marker=dict(colors=colors_scale),
-                    textinfo='percent', hole=0.5,
+                    sort=False, # Bloque l'ordre pour garder la cohérence des couleurs
+                    textinfo='percent', 
+                    hole=0.5,
                     hovertemplate="<b>%{label}</b><br>Volume: %{value}<extra></extra>"
                 ), row=1, col=i
             )
 
-    fig_eff.update_layout(height=400, margin=dict(t=50, b=0, l=0, r=0), 
-                          legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center"))
+    fig_eff.update_layout(
+        height=400, 
+        margin=dict(t=50, b=0, l=0, r=0), 
+        legend=dict(orientation="h", y=-0.2, x=0.5, xanchor="center")
+    )
     st.plotly_chart(fig_eff, use_container_width=True)
 
-# Analyse Expert
-    counts_fermes = eff_data_list[2]
+    # 3. ANALYSE EXPERT : On pointe sur eff_data_list[1] (les Fermées)
+    counts_fermes = eff_data_list[1] 
     if not counts_fermes.empty and counts_fermes.sum() > 0:
+        # Calcul des TPE (tranches 0 et 1 salarié dans ton mapping)
         tpe_fermes = counts_fermes.loc[counts_fermes.index.isin([0, 1])].sum()
         part_tpe = (tpe_fermes / counts_fermes.sum()) * 100
         with st.chat_message("assistant"):
