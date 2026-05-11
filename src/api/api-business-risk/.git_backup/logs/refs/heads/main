@@ -1,5 +1,0 @@
-0000000000000000000000000000000000000000 9b067c882085649d607a60ea6282c7cf72ac9d8b joel <joel.termondjian@hotmail.com> 1773400908 +0100	clone: from https://huggingface.co/spaces/Djohell/api-business-risk
-9b067c882085649d607a60ea6282c7cf72ac9d8b 9d18580b29b1cf98960f974dbe29ede2228b91c0 joel <joel.termondjian@hotmail.com> 1773499730 +0100	commit: Deploy API connected to MLflow
-9d18580b29b1cf98960f974dbe29ede2228b91c0 a4572c574112a57d13db606e710e979234bc40f0 joel <joel.termondjian@hotmail.com> 1773500088 +0100	commit: maj requirements
-a4572c574112a57d13db606e710e979234bc40f0 97f06af8f1e0b202e76d25f5790734f7bde5284b joel <joel.termondjian@hotmail.com> 1773500471 +0100	commit: maj gitignore
-97f06af8f1e0b202e76d25f5790734f7bde5284b a179cf2ec36163669877387effa4b4406b844cb4 joel <joel.termondjian@hotmail.com> 1773500612 +0100	commit: maj app.py
