@@ -96,7 +96,7 @@ with st.container(border=True):
             st.info("Photo Provider")
         
         st.subheader("Joël TERMONDJIAN")
-        st.markdown("🎓 **20 ans d'Expertise Bancaire & Data Analyst**")
+        st.markdown("🎓 **20 ans d'Expertise Bancaire & Data Scientist**")
 
     with col2:
 
