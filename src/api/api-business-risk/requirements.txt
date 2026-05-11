@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+mlflow
+xgboost
+pandas
+numpy
+python-multipart
+python-dotenv
+boto3
+s3fs

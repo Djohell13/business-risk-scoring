@@ -1,0 +1,22 @@
+# --- SYSTEM & CACHE ---
+__pycache__/
+*.pyc
+.DS_Store
+.env
+venv/
+env/
+.env/
+
+# --- MODELS & DATA ---
+
+models/*
+
+# Exception du fichier de config.
+!models/features_config.json
+
+# On ignore les fichiers lourds à la racine ou ailleurs
+*.xgb
+
+# On ignore les fichiers JSON SAUF ceux dans le dossier models qu'on a explicitement autorisé
+
+checkpoint_*.json
