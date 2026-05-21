@@ -2,45 +2,34 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import s3fs
-import os
 
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Firmographie - Secteurs", layout="wide")
 
-@st.cache_data(show_spinner=False)
-def load_data_fallback():
-    aws_key = os.environ.get("AWS_ACCESS_KEY_ID") or st.secrets.get("AWS_ACCESS_KEY_ID")
-    aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY") or st.secrets.get("AWS_SECRET_ACCESS_KEY")
-    bucket_name = os.environ.get("AWS_BUCKET_NAME") or st.secrets.get("AWS_BUCKET_NAME")
-    file_path = os.environ.get("AWS_FILE_PATH") or st.secrets.get("AWS_FILE_PATH")
+# --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
+if 'df' in st.session_state and st.session_state['df'] is not None:
+    # 🎯 On récupère la base globale chargée sur la main
+    df_raw = st.session_state['df']
     
-    if not aws_key: return None
-    try:
-        fs = s3fs.S3FileSystem(key=aws_key, secret=aws_secret, anon=False)
-        s3_path = f"s3://{bucket_name}/{file_path}"
-        with fs.open(s3_path, mode='rb') as f:
-            df_loaded = pd.read_parquet(f)
-        
-        # Conversion Date impérative pour les colonnes catégorielles
-        if "Date_fermeture_finale" in df_loaded.columns:
-            df_loaded["Date_fermeture_finale"] = pd.to_datetime(df_loaded["Date_fermeture_finale"], errors='coerce')
-        return df_loaded
-    except Exception as e:
-        st.error(f"Erreur S3 : {e}")
-        return None
-
-# --- LOGIQUE DE RÉCUPÉRATION ---
-if 'df' not in st.session_state or st.session_state['df'] is None:
-    with st.status("📡 Synchronisation des données sectorielles...", expanded=False) as status:
-        df = load_data_fallback()
-        st.session_state['df'] = df
-        status.update(label="Base sectorielle chargée !", state="complete")
+    # 🎯 On recrée ton optimisation RAM localement sans re-télécharger le fichier
+    required_columns = [
+        "Code du département de l'établissement",
+        "fermeture",
+        "age_estime",
+        "Date_fermeture_finale",
+        "code_ape",
+        "libelle_section_ape"
+    ]
+    
+    # On ne garde que ce qui est nécessaire pour cette page et on convertit en catégorie
+    df = df_raw[required_columns].copy()
+    for col in ["Code du département de l'établissement", "code_ape", "libelle_section_ape"]:
+        if col in df.columns:
+            df[col] = df[col].astype("category")
 else:
-    df = st.session_state['df']
-
-if df is None:
-    st.error("❌ Données indisponibles.")
+    # Sécurité Hugging Face
+    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
+    st.info("💡 *Pourquoi ? Le dataset global s'initialise uniquement sur la page principale pour garantir la fluidité des filtres.*")
     st.stop()
 
 # --- 2. FILTRES SIDEBAR ---
@@ -49,12 +38,11 @@ with st.sidebar:
     st.title("Filtres")
     st.header("📍 Géographie")
     
-    # Gestion du tri sur catégories
-    depts = sorted(df["Code du département de l'établissement"].unique().astype(str).tolist())
+    # Extraction des départements (gestion propre du type category)
+    depts = sorted(df["Code du département de l'établissement"].dropna().unique().astype(str).tolist())
     dept_options = ["Toute la France"] + depts
-    dept_sel = st.selectbox("Département :", options=dept_options, index=0)
+    dept_sel = st.selectbox("Département :", options=dept_options, index=0, key="sb_secteurs_dept")
     
-    # Filtrage (on convertit en str pour la comparaison si besoin)
     if dept_sel == "Toute la France":
         df_selection = df
     else:
@@ -66,6 +54,7 @@ with st.sidebar:
 # --- 3. PRÉPARATION ---
 df_fermes_only = df_selection[df_selection["fermeture"] == 1].copy()
 
+# Extraction propre des catégories principales
 top_secteurs_list = df_fermes_only['libelle_section_ape'].value_counts().head(10).index.astype(str).tolist()
 
 # --- 4. TITRE ET TOP SECTEURS ---
@@ -104,7 +93,7 @@ with st.container(border=True):
     else:
         st.info("Aucune fermeture enregistrée sur ce périmètre.")
 
-# --- 5. COMPARATIF DU RISQUE (Version Risque Réel Sectoriel) ---
+# --- 5. COMPARATIF DU RISQUE ---
 st.subheader("⚖️ Comparatif du risque de fermeture")
 
 with st.container(border=True):
@@ -114,18 +103,15 @@ with st.container(border=True):
         secteurs_choisis = st.multiselect("🔍 Comparer les secteurs :", options=top_secteurs_list, default=[top_secteurs_list[0]])
 
         if secteurs_choisis:
-            # 1. On prépare une fonction de calcul par secteur
             def calculate_sector_hazard(df_full, sectors):
                 all_results = []
                 for sector in sectors:
-                    df_s = df_full[df_full['libelle_section_ape'] == sector]
+                    df_s = df_full[df_full['libelle_section_ape'].astype(str) == sector]
                     for age in range(36):
-                        # Morts à cet âge dans ce secteur
                         morts = len(df_s[(df_s["age_estime"] == age) & (df_s["fermeture"] == 1)])
-                        # Population exposée (vivants ou morts de cet âge ou plus)
                         exposes = len(df_s[df_s["age_estime"] >= age])
                         
-                        if exposes > 30: # Seuil un peu plus bas pour le détail sectoriel
+                        if exposes > 30:
                             all_results.append({
                                 "Secteur": sector,
                                 "age_estime": age,
@@ -133,17 +119,15 @@ with st.container(border=True):
                             })
                 return pd.DataFrame(all_results)
 
-            # 2. Calcul des données
             df_stats = calculate_sector_hazard(df_selection, secteurs_choisis)
 
-            # 3. Affichage du graphique
             if not df_stats.empty:
                 fig_comp_risk = px.line(
                     df_stats, x="age_estime", y="proba", color="Secteur",
                     template="plotly_white", height=500,
                     labels={"age_estime": "Âge de l'entreprise", "proba": "Risque annuel (%)"}
                 )
-                fig_comp_risk.update_traces(mode="lines", line=dict(width=3), hovertemplate="<b>%{fullData.name}</b><br>Âge : %{x} ans<br>Risque : %{y:.2f}%<extra></extra>")
+                fig_comp_risk.update_traces(mode="lines+markers", line=dict(width=3), hovertemplate="<b>%{fullData.name}</b><br>Âge : %{x} ans<br>Risque : %{y:.2f}%<extra></extra>")
                 fig_comp_risk.update_layout(
                     legend=dict(orientation="h", y=-0.3, x=0.5, xanchor="center"),
                     yaxis=dict(rangemode="tozero")
@@ -152,28 +136,51 @@ with st.container(border=True):
             else:
                 st.warning("Données insuffisantes pour comparer ces secteurs avec cette rigueur statistique.")
 
-# --- 6. HEATMAP ---
-st.subheader("🌡️ Heatmap : Intensité des fermetures par mois (2024)")
-
-with st.container(border=True):
-    st.markdown("Détection de la **saisonnalité sectorielle**.")
+# --- 6. HEATMAP DYNAMIQUE ---
+if top_secteurs_list:
+    # 1. Identifier de manière dynamique la dernière année complète disponible
+    annees_fermetures = df_selection["Date_fermeture_finale"].dt.year.dropna().unique().astype(int)
     
-    mois_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
+    if len(annees_fermetures) > 0:
+        max_annee_data = max(annees_fermetures)
+        
+        # Règle métier : Si l'année la plus récente est 2026 (en cours), on prend 2025 pour avoir un historique complet
+        from datetime import datetime
+        annee_en_cours = datetime.now().year # Dynamiquement 2026
+        
+        if max_annee_data == annee_en_cours and (max_annee_data - 1) in annees_fermetures:
+            annee_heatmap = max_annee_data - 1
+            Explication_annee = f"l'année complète {annee_heatmap} (l'année {max_annee_data} étant en cours)"
+        else:
+            annee_heatmap = max_annee_data
+            Explication_annee = f"l'année {annee_heatmap}"
+    else:
+        annee_heatmap = 2025 # Fallback de sécurité
+        Explication_annee = "l'année 2025"
 
-    if top_secteurs_list:
-        df_2024_raw = df_selection[
-            (df_selection["fermeture"] == 1) & 
-            (df_selection["Date_fermeture_finale"].dt.year == 2024) &
-            (df_selection["libelle_section_ape"].isin(top_secteurs_list))
+    st.subheader(f"🌡️ Heatmap : Intensité des fermetures par mois ({annee_heatmap})")
+
+    with st.container(border=True):
+        st.markdown(f"Détection de la **saisonnalité sectorielle** basée sur {Explication_annee}.")
+        
+        mois_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
+
+        # Cast en str pour la robustesse avec les catégories
+        df_selection_copy = df_selection.copy()
+        df_selection_copy['libelle_section_ape_str'] = df_selection_copy['libelle_section_ape'].astype(str)
+        
+        # Filtrage basé sur l'année calculée dynamiquement
+        df_heatmap_raw = df_selection_copy[
+            (df_selection_copy["fermeture"] == 1) & 
+            (df_selection_copy["Date_fermeture_finale"].dt.year == annee_heatmap) &
+            (df_selection_copy["libelle_section_ape_str"].isin(top_secteurs_list))
         ].copy()
 
-        df_2024_raw['libelle_section_ape'] = df_2024_raw['libelle_section_ape'].cat.remove_unused_categories()
-
-        if not df_2024_raw.empty:
+        if not df_heatmap_raw.empty:
             df_pivot_heat = (
-                df_2024_raw.assign(Mois_num = lambda x: x["Date_fermeture_finale"].dt.month)
-                .groupby(["libelle_section_ape", "Mois_num"], observed=True).size().reset_index(name="Nb")
-                .pivot(index="libelle_section_ape", columns="Mois_num", values="Nb").fillna(0)
+                df_heatmap_raw.assign(Mois_num = lambda x: x["Date_fermeture_finale"].dt.month)
+                .groupby(["libelle_section_ape_str", "Mois_num"], observed=True).size().reset_index(name="Nb")
+                .pivot(index="libelle_section_ape_str", columns="Mois_num", values="Nb").fillna(0)
                 .reindex(columns=range(1, 13), fill_value=0)
             )
 
@@ -200,9 +207,9 @@ with st.container(border=True):
             st.plotly_chart(fig_heat, use_container_width=True)
 
             with st.chat_message("assistant"):
-                st.markdown("**Analyse :** La heatmap met en évidence les périodes critiques par secteur. Les pics de fermeture peuvent coïncider avec les fins de trimestres civils.")
+                st.markdown(f"**Analyse :** La heatmap met en évidence les périodes critiques par secteur sur **{annee_heatmap}**. Les pics structurels de fermeture observés à intervalles réguliers révèlent l'effet des échéances comptables et déclaratives de fin de trimestre.")
         else:
-            st.info("ℹ️ Données 2024 insuffisantes pour générer la Heatmap.")
+            st.info(f"ℹ️ Données {annee_heatmap} insuffisantes pour générer la Heatmap.")
 
 st.divider()
 st.caption("ℹ️ Source : Base SIRENE & Bilans Publics | Focus méthodologique : SAS & SARL.")

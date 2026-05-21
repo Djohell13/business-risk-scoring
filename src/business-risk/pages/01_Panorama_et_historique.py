@@ -2,74 +2,42 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
-import s3fs
-import os
 
-# 1. CONFIGURATION 
-st.set_page_config(page_title="Firmographie - Diagnostic", layout="wide")
+# --- 1. CONFIGURATION ---
+st.set_page_config(page_title="Egide - Diagnostic Firmographique", layout="wide")
 
-@st.cache_data(show_spinner=False)
-def load_data_fallback():
-    aws_key = os.environ.get("AWS_ACCESS_KEY_ID") or st.secrets.get("AWS_ACCESS_KEY_ID")
-    aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY") or st.secrets.get("AWS_SECRET_ACCESS_KEY")
-    bucket_name = os.environ.get("AWS_BUCKET_NAME") or st.secrets.get("AWS_BUCKET_NAME")
-    file_path = os.environ.get("AWS_FILE_PATH") or st.secrets.get("AWS_FILE_PATH")
-
-    if not aws_key:
-        return None
-
-    try:
-        fs = s3fs.S3FileSystem(key=aws_key, secret=aws_secret, anon=False)
-        s3_path = f"s3://{bucket_name}/{file_path}"
-        with fs.open(s3_path, mode='rb') as f:
-            df_loaded = pd.read_parquet(f)
-        
-        if "Date_fermeture_finale" in df_loaded.columns:
-            df_loaded["Date_fermeture_finale"] = pd.to_datetime(df_loaded["Date_fermeture_finale"], errors='coerce')
-        return df_loaded
-    except Exception as e:
-        st.error(f"Erreur de connexion S3 : {e}")
-        return None
-
-# --- LOGIQUE DE RÉCUPÉRATION ---
-if 'df' not in st.session_state or st.session_state['df'] is None:
-    with st.status("🚀 Connexion au Cloud AWS S3...", expanded=True) as status:
-        st.write("Vérification des accès S3...")
-        df = load_data_fallback()
-        if df is not None:
-            st.session_state['df'] = df
-            st.write("Analyse du fichier Parquet effectuée.")
-            status.update(label="Données synchronisées avec succès !", state="complete", expanded=False)
-        else:
-            status.update(label="Échec de la connexion", state="error")
-            st.stop()
-else:
+# --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
+if 'df' in st.session_state and st.session_state['df'] is not None:
     df = st.session_state['df']
+else:
+    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
+    st.info("💡 *Pourquoi ? Le dataset global est volumineux et s'initialise uniquement sur la page principale pour optimiser les performances.*")
+    st.stop()
 
-# --- 2. FILTRES SIDEBAR (Design : Ajout d'icônes et structure claire) ---
+# --- 2. FILTRES SIDEBAR ---
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/shield.png", width=60)
     st.title("Observatoire")
     st.markdown("---")
     
     st.header("📍 Périmètre Géo")
-    dept_options = ["Toute la France"] + sorted(df["Code du département de l'établissement"].unique().tolist())
+    dept_options = ["Toute la France"] + sorted(df["Code du département de l'établissement"].dropna().unique().tolist())
     dept_sel = st.selectbox(
         "Choisir un département :", 
         options=dept_options,
-        index=0
+        index=0,
+        key="sb_panorama_departement"
     )
     
     df_selection = df if dept_sel == "Toute la France" else df[df["Code du département de l'établissement"] == dept_sel]
-    label_zone = "l'ensemble de la France" if dept_sel == "Toute la France" else f"le département {dept_sel}"
     
     st.markdown("---")
-    st.caption(f"🌍 **Base de données :** {len(df_selection):,} établissements")
+    st.caption(f"🌍 **Base analysée :** {len(df_selection):,} établissements")
 
-# --- 3. ENTÊTE (Design : Utilisation de colonnes et containers) ---
+# --- 3. ENTÊTE ---
 st.title("📊 1. Historiques & Dynamiques")
 st.markdown("""
-Cette section analyse la trajectoire des fermetures d'entreprises depuis 2008 
+Cette section analyse la trajectoire des fermetures d'entreprises depuis 1975 
 pour identifier les cycles de rupture et définir notre périmètre d'intervention.
 """)
 
@@ -87,160 +55,210 @@ with st.container(border=True):
     with col_b:
         st.markdown("#### 💡 Vision Métier")
         st.success("""
-        * 🎯 **Données qualifiée :** Base contrôlée (Pappers/INSEE).
-        * ⚖️ **Rigueur :** Historique consolidé depuis **2008**.
+        * 🎯 **Données qualifiées :** Base contrôlée (Pappers/INSEE).
+        * ⚖️ **Rigueur :** Historique consolidé depuis **1975**.
         * 📉 **Sémantique :** Étude des conditions de fermeture.
         """)
 
-# --- 4. CALCULS & KPI (Design : Metrics alignées) ---
-annee_min = df_selection["Date_fermeture_finale"].dt.year.min()
-annee_max = df_selection["Date_fermeture_finale"].dt.year.max()
-nb_annees = (annee_max - annee_min + 1) if pd.notna(annee_min) else 1
+# --- 4. CALCULS & KPI ---
+annee_min_global = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.min()
+annee_max_global = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.max()
+nb_annees_global = (annee_max_global - annee_min_global + 1) if pd.notna(annee_min_global) else 1
 
 df_fermes = df_selection[df_selection["fermeture"] == 1]
 total_fermetures = len(df_fermes)
-taux_annuel = (df_selection["fermeture"].mean() * 100) / nb_annees
+taux_annuel = (df_selection["fermeture"].mean() * 100) / nb_annees_global
 age_moyen = df_fermes["age_estime"].mean() if total_fermetures > 0 else 0
 
 with st.container(border=True):
     c1, c2, c3 = st.columns(3)
     c1.metric("Total Fermetures", f"{total_fermetures:,}".replace(",", " "))
-    c2.metric("Taux Annuel", f"{taux_annuel:.2f} %")
+    c2.metric("Taux Annuel Moyen", f"{taux_annuel:.2f} %")
     c3.metric("Âge moyen au dépôt", f"{age_moyen:.1f} ans")
 
-# --- 5. GRAPHIQUES (Design : Encapsulés dans des containers) ---
+# --- 5. GRAPHIQUES ---
 
-# Graphique 1 : Âge
+# =====================================================================
+# Graphique 1 : Âge (Volume) -> LIMITÉ À 50 ANS
+# =====================================================================
 st.subheader("🕰️ Analyse de la pérennité")
 
 with st.container(border=True):
-
     st.markdown("""
     Cette analyse compare l'âge des sociétés **actuellement en activité** avec l'âge qu'avaient les sociétés **disparues** au moment de leur fermeture. 
     """)
     
-    df_plot = df_selection.assign(Statut = df_selection["fermeture"].map({0: "Ouvertes", 1: "Fermées"}))
+    df_plot = df_selection.assign(
+        Statut = df_selection["fermeture"].map({0: "Ouvertes", 1: "Fermées"}),
+        age_arrondi = df_selection["age_estime"].round(0)
+    )
+    
+    df_plot_50 = df_plot[df_plot["age_arrondi"] <= 50]
     
     fig_age = px.histogram(
-        df_plot, x="age_estime", color="Statut", barmode="group",
+        df_plot_50, x="age_arrondi", color="Statut", barmode="group",
         color_discrete_map={"Ouvertes": "#178F49", "Fermées": "#FFFFFF"}, 
         category_orders={"Statut": ["Ouvertes", "Fermées"]},
         template='plotly_white', height=400
     )
     
-    # --- PERSONNALISATION AVANCÉE DU HOVER ET DES AXES ---
     fig_age.update_traces(
-
         hovertemplate="<b>Âge :</b> %{x} ans<br><b>Total :</b> %{y} entités<extra></extra>"
     )
-
+    
     fig_age.update_layout(
         margin=dict(l=20, r=20, t=10, b=20),
         legend_title_text="Statut",
         hovermode="x unified",
         xaxis_title="Âge de l'entreprise (en années)",
         yaxis_title="",
-        bargap=0.1
+        bargap=0.1,
+        xaxis=dict(
+            tickmode="linear",
+            tick0=0,
+            dtick=5,
+            range=[-0.7, 35.7]
+        )
     )
     
-    st.plotly_chart(fig_age, use_container_width=True)
+    st.plotly_chart(fig_age, use_container_width=True, key="chart_age_histogram")
 
     with st.chat_message("assistant"):
         st.markdown(f"""
         **Analyse :** On observe un **pic de sinistralité** entre 2 et 5 ans, phase charnière dite de la 'vallée de la mort'. 
-        L'âge moyen ({age_moyen:.1f} ans) souligne une **fragilité structurelle précoce** et une difficulté à pérenniser les structures au-delà du premier cycle de croissance.
+        L'âge moyen ({age_moyen:.1f} ans) souligne une **fragilité structurelle précoce** et une difficulty à pérenniser les structures au-delà du premier cycle de croissance.
         """)
 
-# --- SYNTHÈSE PÉDAGOGIQUE ---
+# --- SYNTHÈSE PÉDAGOGIQUE RÉALIGNÉE ---
 st.info("""
-    💡 **Important : Volume vs Intensité**
+    💡 **Corrélation Volume vs Intensité**
     
-    Il n'y a pas de contradiction entre les visuels de cette page, mais une **double lecture du risque** :
+    Les deux analyses convergent vers le même constat : **le facteur de risque est intrinsèquement lié à la jeunesse de l'entreprise.**
     
-    1. **Le Volume (Graphique ci-dessus) :** Les fermetures sont numériquement plus nombreuses entre 2 et 5 ans. C'est la **mortalité infantile** : un effet de masse dû au grand nombre de créations récentes.
-    2. **L'Intensité (Graphique ci-dessous) :** Le risque statistique individuel peut remonter après 25 ans. C'est la **mortalité de maturité** : elle ne concerne plus la gestion courante, mais les enjeux de **transmission** ou de fin de cycle.
+    1. **En Volume (Graphique ci-dessus) :** Les disparitions d'entreprises touchent massivement les structures de moins de 10 ans. 
+    2. **En Intensité (Graphique ci-dessous) :** La probabilité statistique individuelle de fermer au cours de l'année est elle aussi maximale au départ, puis elle décroît continuellement avec l'âge. 
     
-    **En résumé :** On passe d'une fragilité de **jeunesse** (le nombre) à une fragilité de **maturité** (la probabilité).
+    **Conclusion :** Plus une structure accumule de l'ancienneté, plus son modèle se solidifie, réduisant à la fois le volume global des défaillances et le risque individuel de fermeture.
     """)
 
-# --- Graphique 2 : Probabilité (Version Risque Réel) ---
+# =====================================================================
+# Graphique 2 : Probabilité (INDICE DE VULNÉRABILITÉ JUSQU'À 49 ANS)
+# =====================================================================
 st.subheader("📈 Dynamique de fermeture : l'indice de vulnérabilité par âge")
 
 with st.container(border=True):
     st.markdown("""
     Ce graphique mesure la **fragilité relative** des entreprises. 
-    Il répond à la question : *Si l'entreprise a atteint l'âge X, quel est son risque statistique de fermer dans l'année qui suit ?*
+    Il répond à la question : *Si l'entreprise a atteint l'âge X, quel est son risque statistique d'enregistrer une fermeture au cours de l'exercice ?*
     """)
     
-    # --- Nouvelle Logique de Calcul : Taux de Hasard ---
-    def calculate_hazard_rate(df_input):
-        data_list = []
+    age_ans_temp = df_selection["age_estime"].round(0).astype(int)
 
-        for age in range(36):
-   
-            fermetures_age = len(df_input[(df_input["age_estime"] == age) & (df_input["fermeture"] == 1)])
+    annee_min = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.min()
+    annee_max = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.max()
+    nb_annees = (annee_max - annee_min + 1) if pd.notna(annee_min) else 1
 
-            exposes = len(df_input[df_input["age_estime"] >= age])
-            
-            if exposes > 50: 
-                proba = (fermetures_age / exposes) * 100
-                data_list.append({"age_estime": age, "proba_fermeture": proba})
-        
-        return pd.DataFrame(data_list)
+    fermetures_par_age = df_selection[df_selection["fermeture"] == 1].groupby(age_ans_temp).size()
+    flux_annuel_fermetures = fermetures_par_age / nb_annees
 
-    df_age_events = calculate_hazard_rate(df_selection)
+    stock_actif_par_age = df_selection[df_selection["fermeture"] == 0].groupby(age_ans_temp).size()
 
-    # --- Création du Graphique ---
-    fig_proba = go.Figure()
-    
-    if not df_age_events.empty:
-        fig_proba.add_trace(go.Scatter(
-            x=df_age_events["age_estime"], 
-            y=df_age_events["proba_fermeture"],
-            mode="lines+markers", 
-            line=dict(width=4, color='#E67E22'),
-            fill='tozeroy', 
-            fillcolor='rgba(230, 126, 34, 0.1)',
-            name="Risque annuel",
-            hovertemplate="<b>Âge :</b> %{x} ans<br><b>Risque de fermeture :</b> %{y:.2f}%<extra></extra>"
-        ))
-    
-    fig_proba.update_layout(
-        template="plotly_white", 
-        height=400, 
-        margin=dict(l=20, r=20, t=30, b=20),
-        xaxis_title="Âge de l'entreprise (années)",
-        hovermode="x unified",
-        yaxis=dict(rangemode="tozero")
+    df_age_events = (
+        pd.DataFrame(
+            {"flux_fermetures": flux_annuel_fermetures, "stock_actif": stock_actif_par_age}
+        )
+        .fillna(0)
+        .rename_axis('age_ans')
+        .reset_index()
     )
+
+    df_age_events["proba_fermeture"] = (
+        df_age_events["flux_fermetures"]
+        / (df_age_events["stock_actif"] + df_age_events["flux_fermetures"]).replace(0, 1)
+    ) * 100
+
+    df_graph = df_age_events[df_age_events["age_ans"] <= 49]
     
-    st.plotly_chart(fig_proba, use_container_width=True)
+    if not df_graph.empty:
+        max_sain = df_graph["proba_fermeture"].max()
+        limite_haute_y = max_sain * 1.15
 
-    # --- AJOUT DU COMMENTAIRE DYNAMIQUE ---
+        fig_courbe = go.Figure()
+        
+        fig_courbe.add_trace(
+            go.Scatter(
+                x=df_graph["age_ans"],
+                y=df_graph["proba_fermeture"],
+                mode="lines+markers", 
+                line=dict(color="#E67E22", width=3), 
+                marker=dict(
+                    size=6,
+                    color="#B8651B",
+                    symbol="circle",
+                    line=dict(color="white", width=1),
+                ),
+                fill='tozeroy', 
+                fillcolor='rgba(230, 126, 34, 0.1)',
+                name="Risque annuel",
+                hovertemplate="<b>Âge de l'entreprise :</b> %{x} ans<br><b>Risque :</b> %{y:.2f}%<extra></extra>"
+            )
+        )
+        
+        fig_courbe.update_layout(
+            paper_bgcolor='rgba(0,0,0,0)', 
+            plot_bgcolor='rgba(0,0,0,0)',  
+            height=500,
+            hovermode="x unified",
+            margin=dict(l=20, r=20, t=10, b=20),
+            xaxis=dict(
+                title=dict(text="Âge de l'entreprise (années)", font=dict(color="#A3AED0")),
+                tickfont=dict(color="#A3AED0"),
+                tickmode="linear",
+                tick0=0,
+                dtick=5,
+                range=[-1, 50],
+                showgrid=True,
+                gridcolor="rgba(255, 255, 255, 0.15)", 
+            ),
+            yaxis=dict(
+                title=dict(text="Risque de fermeture (%)", font=dict(color="#A3AED0")),
+                tickfont=dict(color="#A3AED0"),
+                range=[0, limite_haute_y],
+                showgrid=True,
+                gridcolor="rgba(255, 255, 255, 0.15)", 
+            ),
+        )
+        
+        st.plotly_chart(fig_courbe, use_container_width=True, key="chart_vulnerability_curve")
 
-    if not df_age_events.empty:
-        peak_risk = df_age_events.loc[df_age_events['proba_fermeture'].idxmax()]
-        peak_age = peak_risk['age_estime']
+        peak_risk = df_graph.loc[df_graph['proba_fermeture'].idxmax()]
+        peak_age = peak_risk['age_ans']
         peak_val = peak_risk['proba_fermeture']
 
         with st.chat_message("assistant"):
             if peak_age < 7:
                 st.markdown(f"""
-                **Analyse : Mortalité Infantile.** Le risque culmine à **{peak_age} ans** ({peak_val:.1f}%). 
-                C'est la phase critique de validation du modèle économique. Passé ce cap, la structure se consolide.
+                **Analyse : La Mortalité de Maturité, un risque silencieux.** Si le *volume* de fermetures décroît continuellement avec l'âge (Graphique 1), **l'intensité du risque**, elle, ne suit pas la même trajectoire linéaire (Graphique 2).
+
+                * 🚨 **Le cap de consolidation (0-6 ans) :** Le risque culmine très tôt, avec un pic majeur à 3 ans, matérialisant l'épuisement du capital de départ et la phase critique de validation du modèle économique.
+                * 📈 **Le "Rebond de maturité" (après 35 ans) :** Après une phase de stabilité maximale vers 30 ans, le risque statistique de fermer **cesse de descendre et remonte passé 35-37 ans**. 
+
+                Ce phénomène relate de manière flagrante la **mortalité de maturité** : il ne concerne plus des problèmes de gestion courante, mais des enjeux critiques de fin de cycle, comme l'obsolescence d'un modèle non pivoté ou, plus fréquemment, les difficultés liées à la **cession/transmission d'entreprise**.
                 """)
             elif peak_age > 25:
                 st.markdown(f"""
-                **Analyse : Risque de Fin de Cycle.** Le pic de défaillance apparaît tardivement, vers **{peak_age} ans** ({peak_val:.1f}%). 
-                Ce phénomène relate souvent des problématiques de **transmission d'entreprise** ou d'essoufflement du modèle historique après trois décennies d'activité.
+                **Analyse : Risque de Fin de Cycle Détecté.** La perspective étendue à 50 ans met en lumière un pic à **{peak_age} ans** ({peak_val:.2f}%). 
+                Ce rebond caractérise de manière flagrante les enjeux de **transmission d'entreprise**, de départ à la retraite des fondateurs historiques, ou d'obsolescence d'un modèle non pivoté.
                 """)
             else:
                 st.markdown(f"""
-                **Analyse : Risque de Maturité.** Le pic se situe à **{peak_age} ans** ({peak_val:.1f}%). 
-                L'exposition au risque est ici liée au second cycle de croissance ou à un besoin de pivot stratégique.
+                **Analyse : Risque de Maturité.** Le pic se situe à **{peak_age} ans** ({peak_val:.2f}%). 
+                L'exposition au risque est ici liée à des enjeux de second cycle de croissance ou à un besoin de pivot stratégique du modèle économique.
                 """)
 
-# Graphique 3 : Mensuel 
+# =====================================================================
+# Graphique 3 : Mensuel -> S'ARRÊTE EN MARS 2026 DE MANIÈRE NATURELLE
+# =====================================================================
 st.subheader("📅 Dynamique mensuelle et comparaison annuelle")
 
 with st.container(border=True):
@@ -248,17 +266,13 @@ with st.container(border=True):
     Cette analyse permet de visualiser si les fermetures s'accélèrent ou ralentissent d'un mois sur l'autre par rapport aux années précédentes. 
     """)
 
-    # 1. Filtrage strict des données
     df_comp = df_selection[(df_selection["fermeture"] == 1) & (df_selection["Date_fermeture_finale"].notna())].copy()
     
     if not df_comp.empty:
-  
         df_comp['Année'] = df_comp["Date_fermeture_finale"].dt.year
         df_comp['Mois'] = df_comp["Date_fermeture_finale"].dt.month
 
-
-        mask_incomplet = (df_comp['Année'] == 2025) & (df_comp['Mois'] >= 10)
-        df_clean = df_comp[~mask_incomplet].query("Année >= 2023")
+        df_clean = df_comp.query("Année >= 2023")
 
         df_pivot = df_clean.pivot_table(
             index="Mois", columns="Année", values="fermeture", aggfunc="count", fill_value=0
@@ -272,38 +286,42 @@ with st.container(border=True):
             template='plotly_white', 
             height=400,
             labels={"value": "Nombre de fermetures", "Mois": "Mois"},
-            color_discrete_sequence = ["#4C759F", "#94A3B8", "#6B2C6B"]
+            color_discrete_sequence=["#4C759F", "#94A3B8", "#6B2C6B", "#E67E22"]
         )
         
         fig_comp.update_layout(
-            xaxis=dict(tickmode='array', tickvals=list(range(1,13)), ticktext=mois_labels),
+            xaxis=dict(tickmode='array', tickvals=list(range(1, 13)), ticktext=mois_labels),
             yaxis_title="Nombre de fermetures",
             legend_title_text="Année",
             margin=dict(l=20, r=20, t=20, b=20)
         )
         
-        st.plotly_chart(fig_comp, use_container_width=True)
+        st.plotly_chart(fig_comp, use_container_width=True, key="chart_monthly_comparison")
 
-        # --- COMMENTAIRE DYNAMIQUE (Logique 2023 vs 2024) ---
         if 2023 in df_pivot.columns and 2024 in df_pivot.columns:
             total_23 = df_pivot[2023].sum()
             total_24 = df_pivot[2024].sum()
             var_23_24 = ((total_24 - total_23) / total_23) * 100
             
-            # Analyse courte pour 2025
-            msg_2025 = ""
+            msg_complement = ""
             if 2025 in df_pivot.columns:
-                total_25_sept = df_pivot[2025].sum()
-                msg_2025 = f" Sur les 9 premiers mois de **2025**, on recense déjà **{total_25_sept}** fermetures."
+                total_25 = df_pivot[2025].sum()
+                msg_complement += f" L'année **2025** affiche un total consolidé de **{total_25:,}** fermetures.".replace(",", " ")
+            
+            if 2026 in df_pivot.columns:
+                total_26_t1 = df_pivot[2026].sum()
+                msg_complement += f" Pour **2026**, le premier trimestre (Janvier-Mars) enregistre déjà **{total_26_t1:,}** cessations.".replace(",", " ")
 
             st.markdown(f"""
-            > **Analyse du flux :** Le volume de fermetures a évolué de **{var_23_24:+.1f}%** entre 2023 et 2024.{msg_2025}
+            > **Analyse du flux :** Le volume de fermetures a évolué de **{var_23_24:+.1f}%** entre 2023 et 2024.{msg_complement}
             """)
 
         with st.expander("📝 Note sur la saisonnalité et les données"):
             st.write("""
-            * Les données 2025 sont arrêtées au **30 septembre** pour garantir l'intégrité de l'analyse (données INPI en cours de traitement pour le T4).
-            * Les pics de fin d'année (visibles en 2023/2024) sont structurels et liés aux régularisations administratives de fin d'exercice.
+            * L'année **2025** est présentée dans son intégralité.
+            * Les données pour l'année en cours (**2026**) s'arrêtent au **31 mars** conformément aux dernières données injectées dans le pipeline.
+            * Les pics de fin d'année restent structurellement liés aux clôtures comptables et régularisations administratives.
             """)
+
 st.divider()
-st.caption("ℹ️ Source : Base SIRENE & Bilans Publics | Focus méthodologique : SAS & SARL.")
+st.caption("ℹ️ Source : Base SIRENE & Infogreffe | Focus méthodologique : SAS & SARL.")

@@ -15,14 +15,23 @@ def get_france_geojson():
     except:
         return None
 
-# --- CHARGEMENT & FILTRAGE ---
-if 'df_preds' in st.session_state:
-    df_raw = st.session_state['df_preds'].copy()
+# --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
+if 'df' in st.session_state and st.session_state['df'] is not None:
+    # 🎯 Récupération directe du dataset global de la main
+    df_raw = st.session_state['df'].copy()
+    
+    # Nettoyage et préparation des données de projection
     df_proj = df_raw[df_raw['Statut_Expert'] != '⚫ FERMÉ'].copy()
-    df_proj["dep_code"] = df_proj["Code du département de l'établissement"].astype(str).str.strip().str.zfill(2)
+    
+    # Nettoyage robuste des codes départements (gère les formats textes et numériques)
+    df_proj["dep_code"] = df_proj["Code du département de l'établissement"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.zfill(2)
+    
+    # Exclusion des DOM-TOM pour focaliser l'analyse cartographique métropolitaine
     df_proj = df_proj[~df_proj["dep_code"].str.startswith('97')]
 else:
-    st.warning("⚠️ Données non chargées, veuillez consulter l'onglet 'Expertise et vision' d'abord.")
+    # Sécurité Hugging Face si la session est coupée
+    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
+    st.info("💡 *Pourquoi ? Le dataset global est volumineux et s'initialise uniquement sur la page principale pour optimiser les performances.*")
     st.stop()
 
 # --- SIDEBAR : DÉFINITIONS ---
@@ -37,7 +46,7 @@ with st.sidebar:
     st.caption("Cela permet d'isoler le flux de dégradation futur du stock de risque actuel.")
 
 # --- TITRE PRINCIPAL ---
-st.title("🔮 5. Horizon 2026-2029 : Pilotage de la Résilience Territoriale .")
+st.title("🔮 5. Horizon 2026-2029 : Pilotage de la Résilience Territoriale.")
 
 # --- BLOC MÉTHODOLOGIQUE COMPLET ---
 with st.container(border=True):
@@ -88,8 +97,7 @@ with st.container(border=True):
 
     with col_pedago2:
         st.markdown("🌡️ **Le Seuil de 10%**")
-        st.markdown("C'est notre **filtre de basculement**. Toute entreprise dépassant cette probabilité est comptabilisée dans le **Volume** des alertes et impacte directement" \
-        " la carte.", unsafe_allow_html=True)
+        st.markdown("C'est notre **filtre de basculement**. Toute entreprise dépassant cette probabilité est comptabilisée dans le **Volume** des alertes et impacte directement la carte.", unsafe_allow_html=True)
 
     with col_pedago3:
         st.markdown("🌊 **L'Effet de Vague**")
@@ -97,11 +105,11 @@ with st.container(border=True):
 
 st.divider()
 
-# --- INITIALISATION DE L'HORIZON ---
-
+# --- INITIALISATION & SYNCHRONISATION DE L'HORIZON ---
 if 'horizon_val' not in st.session_state:
     st.session_state['horizon_val'] = 1
 
+# Capture immédiate de l'horizon courant
 h_val = st.session_state['horizon_val']
 
 # --- 2. CALCULS DYNAMIQUES ---
@@ -116,8 +124,9 @@ if h_val == 1:
     label_vol, label_delta = "Entreprises fragiles (Stock actuel)", "Inventaire de départ"
 else:
     df_proj['val_metier'] = ((df_proj['is_fragile_curr'] == 1) & (df_proj['is_fragile_N1'] == 0)).astype(int)
-    label_vol, label_delta = "Nouveaux basculements (Flux)", f"Dégradations nettes prévues"
+    label_vol, label_delta = "Nouveaux basculements (Flux)", "Dégradations nettes prévues"
 
+# Agrégation par département
 map_data = df_proj.groupby("dep_code").agg({'is_fragile_curr': 'mean', 'val_metier': 'sum'}).reset_index()
 map_data['Taux_Fragilite'] = map_data['is_fragile_curr'] * 100
 moyenne_nat = map_data['Taux_Fragilite'].mean()
@@ -139,6 +148,8 @@ with col_map:
         fig_map.update_geos(fitbounds="locations", visible=False)
         fig_map.update_layout(margin={"r":0,"t":0,"l":0,"b":0}, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
         st.plotly_chart(fig_map, use_container_width=True)
+    else:
+        st.warning("⚠️ Impossible de récupérer le fond de carte GeoJSON.")
 
 with col_stats:
     vol_total = map_data['val_metier'].sum()
@@ -149,15 +160,15 @@ with col_stats:
     secteurs_data.columns = ['Secteur', 'Taux']
     
     fig_bars = px.bar(secteurs_data, x='Taux', y='Secteur', orientation='h', color_discrete_sequence=["#E67E22"])
-    fig_bars.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin={"r":40,"t":10,"l":0,"b":0}, height=350,
-                           yaxis=dict(ticktext=[(s[:25] + '...') if len(s) > 25 else s for s in secteurs_data['Secteur']], tickvals=secteurs_data['Secteur']))
+    fig_bars.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin={"r":40,"t":10,"l":0,"b":0}, height=350,
+        yaxis=dict(ticktext=[(s[:25] + '...') if len(s) > 25 else s for s in secteurs_data['Secteur']], tickvals=secteurs_data['Secteur'])
+    )
     st.plotly_chart(fig_bars, use_container_width=True, config={'displayModeBar': False})
 
-# --- BARRE DES HORIZONS ---
-
+# --- BARRE DE SÉLECTION DE L'HORIZON ---
 st.markdown("""
     <style>
-    /* On cible le conteneur des colonnes pour l'alignement vertical */
     [data-testid="stHorizontalBlock"] {
         align-items: center;
     }
@@ -167,11 +178,9 @@ st.markdown("""
 col_horizon, col_slider, col_info = st.columns([1.2, 1.5, 1.3])
 
 with col_horizon:
-
     st.markdown("<p style='margin:0; font-weight:bold;'>Choisissez l'horizon sur les 3 années à venir :</p>", unsafe_allow_html=True)
 
 with col_slider:
-
     st.session_state['horizon_val'] = st.select_slider(
         "", 
         options=[1, 2, 3],
@@ -180,7 +189,6 @@ with col_slider:
     )
 
 with col_info:
-
     st.info(f"Prédictions à **N+{st.session_state['horizon_val']}**")
 
 st.markdown("---")
@@ -189,13 +197,19 @@ st.markdown("---")
 t1, t2 = st.columns(2)
 with t1:
     st.write(f"**📍 Focus géographique : {label_vol}**")
-    st.dataframe(map_data.sort_values('val_metier', ascending=False).head(5)[['dep_code', 'val_metier', 'Taux_Fragilite']]
-                 .rename(columns={'dep_code': 'Dept', 'val_metier': 'Volume', 'Taux_Fragilite': '% Fragiles'}), use_container_width=True, hide_index=True)
+    st.dataframe(
+        map_data.sort_values('val_metier', ascending=False).head(5)[['dep_code', 'val_metier', 'Taux_Fragilite']]
+        .rename(columns={'dep_code': 'Dept', 'val_metier': 'Volume', 'Taux_Fragilite': '% Fragiles'}), 
+        use_container_width=True, hide_index=True
+    )
 
 with t2:
     st.write("**🛡️ Zones de Résilience (Sur-performance)**")
-    st.dataframe(map_data.sort_values('Indice', ascending=True).head(5)[['dep_code', 'Taux_Fragilite', 'Indice']]
-                 .rename(columns={'dep_code': 'Dept', 'Taux_Fragilite': '% Fragiles', 'Indice': 'Indice (Moy=100)'}), use_container_width=True, hide_index=True)
+    st.dataframe(
+        map_data.sort_values('Indice', ascending=True).head(5)[['dep_code', 'Taux_Fragilite', 'Indice']]
+        .rename(columns={'dep_code': 'Dept', 'Taux_Fragilite': '% Fragiles', 'Indice': 'Indice (Moy=100)'}), 
+        use_container_width=True, hide_index=True
+    )
 
 with st.expander("⚖️ Note sur l'interprétation"):
     st.markdown(f"Ce diagnostic à N+{h_val} identifie les zones de fragilité atypique par rapport à la moyenne nationale du moment.")

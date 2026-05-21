@@ -1,7 +1,18 @@
 import streamlit as st
+import pandas as pd
 
 # --- CONFIGURATION ---
 st.set_page_config(page_title="Audit & Méthodologie", layout="wide")
+
+# --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
+if 'df' in st.session_state and st.session_state['df'] is not None:
+    # 🎯 Récupération directe depuis la page main pour éviter les doublons S3
+    df_preds = st.session_state['df']
+else:
+    # Sécurité Hugging Face si la session a sauté en cours de route
+    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
+    st.info("💡 *Pourquoi ? Le dataset global est volumineux et s'initialise uniquement sur la page principale pour optimiser les performances.*")
+    st.stop()
 
 # --- TITRE ---
 st.title("⚙️ 6. Infrastructure & Ingénierie des Données")
@@ -60,23 +71,41 @@ with left_col:
         - **Algorithme :** Gradient Boosting (XGBoost)
         - **Fonction de perte :** NLogLik (Negative Log-Likelihood)
         - **Précision :** 1.36 (Capture 86% des trajectoires de dégradation)
+        - **Horizon cible :** Dynamique temporelle à 1, 2 et 3 ans.
         """)
         
         st.info("💡 **Pourquoi l'AFT ?** Cela permet de prédire non seulement le risque, mais surtout l'échéance du risque (1, 2 ou 3 ans).")
 
 with right_col:
     with st.container(border=True):
-        st.markdown("#### Distribution de la Population")
+        st.markdown("#### 📊 État du Périmètre Étudié")
+        
+        # Récupération du DataFrame depuis le session_state
+        df_master = df_preds
+        
+        # Calculs dynamiques en temps réel sur ton dataset
+        total_rows = len(df_master)
+        nb_vivantes = len(df_master[df_master['fermeture'] == 0])
+        nb_fermees = len(df_master[df_master['fermeture'] == 1])
+        
+        # Calcul du ratio réel d'établissements actifs
+        ratio = nb_vivantes / total_rows if total_rows > 0 else 0
+        
+        # Formatage correct des milliers avec des espaces
+        total_str = f"{total_rows:,}".replace(',', ' ')
+        vivantes_str = f"{nb_vivantes:,}".replace(',', ' ')
+        fermees_str = f"{nb_fermees:,}".replace(',', ' ')
+        
+        # Affichage dynamique propre
         st.markdown(f"""
-        - **Total SIRENE :** 3 400 000
-        - **Filtre Forme Juridique (SAS/SARL) :** - 1 200 000
-        - **Filtre Taille (< 50 sal) :** - 800 000
-        - **Filtre Bilans Publics :** - 200 000
-        ---
-        - **Population Finale Étudiée : 1 200 000**
+        - **Volume total traité :** {total_str}
+        - **Établissements actifs (Scorés) :** **{vivantes_str}**
+        - **Historique de défaillances :** **{fermees_str}**
         """)
-        st.progress(0.35)
-        st.caption("Ratio de sélection : 35% du tissu économique global.")
+        
+        # Barre de progression
+        st.progress(ratio)
+        st.caption(f"Taux d'activité réel du périmètre : {ratio*100:.1f}%")
 
 st.divider()
 
