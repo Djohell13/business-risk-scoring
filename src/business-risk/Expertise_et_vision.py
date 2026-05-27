@@ -25,25 +25,20 @@ st.markdown("""
 # --- 2. FONCTIONS DE CHARGEMENT ---
 @st.cache_data(show_spinner=False)
 def load_global_dataset_s3():
-    """Moteur unique de chargement de la base Parquet globale"""
     aws_key = os.environ.get("AWS_ACCESS_KEY_ID") or st.secrets.get("AWS_ACCESS_KEY_ID")
     aws_secret = os.environ.get("AWS_SECRET_ACCESS_KEY") or st.secrets.get("AWS_SECRET_ACCESS_KEY")
     bucket_name = os.environ.get("AWS_BUCKET_NAME") or st.secrets.get("AWS_BUCKET_NAME")
     file_path = os.environ.get("AWS_FILE_PATH") or st.secrets.get("AWS_FILE_PATH")
-
     if not aws_key: return None
     try:
         fs = s3fs.S3FileSystem(key=aws_key, secret=aws_secret, anon=False)
         s3_path = f"s3://{bucket_name}/{file_path}"
         with fs.open(s3_path, mode='rb') as f:
             df_loaded = pd.read_parquet(f)
-        
-        # Formatage de sécurité pour les dates
         if "Date_fermeture_finale" in df_loaded.columns:
             df_loaded["Date_fermeture_finale"] = pd.to_datetime(df_loaded["Date_fermeture_finale"], errors='coerce')
         return df_loaded
     except Exception as e:
-        st.error(f"Erreur critique S3 lors du chargement initial : {e}")
         return None
 
 @st.cache_data(show_spinner=False)
@@ -64,45 +59,47 @@ def check_space(space_id, token):
         return res.json().get("runtime", {}).get("stage", "UNKNOWN")
     except: return "OFFLINE"
 
-# --- 3. INITIALISATION CENTRALISÉE ---
+# --- 3. INITIALISATION CENTRALISÉE (CORRIGÉE SANS TEMBLOTE) ---
 if 'initialized' not in st.session_state:
-    with st.status("🔮 Initialisation de l'intelligence économique...", expanded=True) as status:
+    # On utilise un spinner global transparent qui ne casse pas le layout
+    with st.spinner("🔮 Initialisation de l'intelligence économique..."):
         hf_token = os.environ.get("HF_TOKEN") or st.secrets.get("HF_TOKEN")
         
-        st.write("📡 1. Connexion aux infrastructures d'API...")
+        # 1. Status APIs
         st.session_state['status_api'] = check_space(os.environ.get("SPACE_API_ID") or st.secrets.get("SPACE_API_ID"), hf_token)
         st.session_state['status_mlflow'] = check_space(os.environ.get("SPACE_MLFLOW_ID") or st.secrets.get("SPACE_MLFLOW_ID"), hf_token)
         
-        st.write("🗂️ 2. Téléchargement et indexation de la base de données globale S3...")
+        # 2. Base S3
         df_global = load_global_dataset_s3()
         
         if df_global is not None:
-            # 🎯 On injecte la base pour TOUTES les pages de l'application
             st.session_state['df'] = df_global
             st.session_state['total_rows'] = len(df_global)
-            status.update(label="Système prêt & Données synchronisées !", state="complete")
         else:
+            # Fallback de secours si S3 crash au démarrage
             st.session_state['total_rows'] = 5816238
-            status.update(label="⚠️ Base de données S3 indisponible", state="error")
+            st.error("⚠️ Base de données S3 momentanément indisponible.")
             st.stop()
             
-        st.write("📸 3. Chargement des ressources visuelles...")
+        # 3. Image
         st.session_state['user_photo'] = load_s3_image("AWS_MY_PHOTO_PATH")
         
+        # Fin de l'initialisation
         st.session_state['initialized'] = True
-        status.update(label="Système prêt !", state="complete")
+        st.rerun() # Force un re-run propre IMMEDIATEMENT avant d'afficher quoi que ce soit
 
-# --- 4. SIDEBAR & UI (Identique à ton code) ---
+# --- 4. SIDEBAR & UI ---
 with st.sidebar:
     st.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=50)
     st.title("Framework")
     with st.container(border=True):
         st.markdown("**Périmètre d'analyse**")
-        st.caption(f"• {st.session_state['total_rows']:,}".replace(",", " ") + " Sociétés (SAS/SARL)")
-    
-    # Affichage dynamique des status
+        # Sécurité d'affichage si total_rows n'est pas encore là
+        total_rows = st.session_state.get('total_rows', 0)
+        st.caption(f"• {total_rows:,}".replace(",", " ") + " Sociétés (SAS/SARL)")
+        
     for key, label in [('status_api', 'API'), ('status_mlflow', 'MLflow')]:
-        val = st.session_state[key]
+        val = st.session_state.get(key, "OFFLINE")
         color = "🟢" if "RUNNING" in val else "🔴"
         st.caption(f"{color} **{label} :** {val}")
 
@@ -126,7 +123,6 @@ with st.container(border=True):
             </p>
             """, unsafe_allow_html=True)
         
-        # --- SECTION AMBITION ---
         st.markdown("#### 🎯 Ambitions : Planification des leviers de soutien")
         a1, a2 = st.columns(2)
         with a1:
@@ -139,10 +135,10 @@ with st.container(border=True):
             - **Conseil Stratégique :** Apporter aux experts-comptables une vision prospective pour un accompagnement adapté et cadencé.
             - **Facilitation d'Investissement :** Détecter les fenêtres d'opportunité pour le financement d'actifs et l'accès aux aides publiques.
             """)
-
         st.write("") 
+        
         p1, p2, p3 = st.columns(3)
-        p1.info("**🏦 Banques**\n\nPasser d'une analyse de risque à une approche de conseil en financement proactif.")
+        p1.info("**🏦 Banques**\n\nPasser d'une analysis de risque à une approche de conseil en financement proactif.")
         p2.success("**📊 Experts-comptables**\n\nÉtablir une feuille de route stratégique basée sur les besoins réels de l'entreprise.")
         p3.warning("**🏛️ Institutions**\n\nPiloter la vitalité du tissu local en ciblant les leviers de soutien.")
 
@@ -152,6 +148,7 @@ st.divider()
 st.markdown("### 🎯 Ma Vision de l'Analyse")
 st.write("L'analyse ne se limite pas aux chiffres, elle décrypte l'ADN profond de l'entreprise.")
 st.write("")
+
 v1, v2, v3, v4 = st.columns(4)
 
 def render_pilier(titre, valeur, desc):
@@ -163,8 +160,5 @@ with v3: render_pilier("⚖️ STRUCTURE", "Résilience", "Impact de la forme ju
 with v4: render_pilier("📍 TERRITOIRE", "Effet Cluster", "Dynamiques de l'écosystème local.")
 
 st.write("")
-st.info("""
-**En bref :** Cette méthode combine analyse sectorielle et indicateurs structurels pour une vision préventive du risque. 
-L'objectif est de comprendre la mécanique de l'entreprise pour mieux protéger son avenir.
-""")
+st.info("""**En bref :** Cette méthode combine analyse sectorielle et indicateurs structurels pour une vision préventive du risque. L'objectif est de comprendre la mécanique de l'entreprise pour mieux protéger son avenir.""")
 st.caption("✨ Application conçue pour l'aide à la décision et le pilotage des risques d'entreprises.")
