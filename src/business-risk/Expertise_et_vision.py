@@ -59,10 +59,10 @@ def check_space(space_id, token):
         return res.json().get("runtime", {}).get("stage", "UNKNOWN")
     except: return "OFFLINE"
 
-# --- 3. INITIALISATION CENTRALISÉE (CORRIGÉE SANS TEMBLOTE) ---
+# --- 3. INITIALISATION CENTRALISÉE ---
 if 'initialized' not in st.session_state:
     # On utilise un spinner global transparent qui ne casse pas le layout
-    with st.spinner("🔮 Initialisation de l'intelligence économique..."):
+    with st.spinner("🔮 Chargement des dernières données..."):
         hf_token = os.environ.get("HF_TOKEN") or st.secrets.get("HF_TOKEN")
         
         # 1. Status APIs
@@ -90,8 +90,7 @@ if 'initialized' not in st.session_state:
 
 # --- 4. SIDEBAR & UI ---
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/artificial-intelligence.png", width=50)
-    st.title("Framework")
+
     with st.container(border=True):
         st.markdown("**Périmètre d'analyse**")
         # Sécurité d'affichage si total_rows n'est pas encore là
