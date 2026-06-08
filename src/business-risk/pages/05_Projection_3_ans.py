@@ -29,9 +29,7 @@ if 'df' in st.session_state and st.session_state['df'] is not None:
     # Exclusion des DOM-TOM pour focaliser l'analyse cartographique métropolitaine
     df_proj = df_proj[~df_proj["dep_code"].str.startswith('97')]
 else:
-    # Sécurité Hugging Face si la session est coupée
-    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
-    st.info("💡 *Pourquoi ? Le dataset global est volumineux et s'initialise uniquement sur la page principale pour optimiser les performances.*")
+    st.warning("⚠️ Session rafraîchie. Veuillez repasser par la page d'accueil.")
     st.stop()
 
 # --- SIDEBAR : DÉFINITIONS ---

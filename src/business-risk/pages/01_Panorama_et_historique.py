@@ -3,6 +3,14 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
+# 1. DÉFINITION DES UTILITAIRES (Fonctions)
+def format_date_fr(date_obj):
+    mois_fr = [
+        "", "janvier", "février", "mars", "avril", "mai", "juin", 
+        "juillet", "août", "septembre", "octobre", "novembre", "décembre"
+    ]
+    return f"{date_obj.day} {mois_fr[date_obj.month]} {date_obj.year}"
+
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Egide - Diagnostic Firmographique", layout="wide")
 
@@ -10,17 +18,13 @@ st.set_page_config(page_title="Egide - Diagnostic Firmographique", layout="wide"
 if 'df' in st.session_state and st.session_state['df'] is not None:
     df = st.session_state['df']
 else:
-    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
-    st.info("💡 *Pourquoi ? Le dataset global est volumineux et s'initialise uniquement sur la page principale pour optimiser les performances.*")
+    st.warning("⚠️ Session rafraîchie. Veuillez repasser par la page d'accueil.")
     st.stop()
 
 # --- 2. FILTRES SIDEBAR ---
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/shield.png", width=60)
-    st.title("Observatoire")
-    st.markdown("---")
     
-    st.header("📍 Périmètre Géo")
+    st.header("📍 Secteur Géographique")
     dept_options = ["Toute la France"] + sorted(df["Code du département de l'établissement"].dropna().unique().tolist())
     dept_sel = st.selectbox(
         "Choisir un département :", 
@@ -35,51 +39,170 @@ with st.sidebar:
     st.caption(f"🌍 **Base analysée :** {len(df_selection):,} établissements")
 
 # --- 3. ENTÊTE ---
-st.title("📊 1. Historiques & Dynamiques")
-st.markdown("""
-Cette section analyse la trajectoire des fermetures d'entreprises depuis 1975 
-pour identifier les cycles de rupture et définir notre périmètre d'intervention.
-""")
+st.title("📊 1. Historique")
 
-with st.container(border=True):
-    col_a, col_b = st.columns([1, 1], gap="large")
-
-    with col_a:
-        st.markdown("#### 🛠️ Cadre Technique")
-        st.info("""
-        * 🏛️ **Structures :** Focus sur les **SAS & SARL**.
-        * 📂 **Source :** Données Insee / Bilans publics.
-        * 🌍 **Géo :** France Métropolitaine & DOM.
-        """)
-
-    with col_b:
-        st.markdown("#### 💡 Vision Métier")
-        st.success("""
-        * 🎯 **Données qualifiées :** Base contrôlée (Pappers/INSEE).
-        * ⚖️ **Rigueur :** Historique consolidé depuis **1975**.
-        * 📉 **Sémantique :** Étude des conditions de fermeture.
-        """)
-
-# --- 4. CALCULS & KPI ---
-annee_min_global = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.min()
-annee_max_global = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.max()
-nb_annees_global = (annee_max_global - annee_min_global + 1) if pd.notna(annee_min_global) else 1
-
-df_fermes = df_selection[df_selection["fermeture"] == 1]
-total_fermetures = len(df_fermes)
-taux_annuel = (df_selection["fermeture"].mean() * 100) / nb_annees_global
-age_moyen = df_fermes["age_estime"].mean() if total_fermetures > 0 else 0
-
-with st.container(border=True):
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Total Fermetures", f"{total_fermetures:,}".replace(",", " "))
-    c2.metric("Taux Annuel Moyen", f"{taux_annuel:.2f} %")
-    c3.metric("Âge moyen au dépôt", f"{age_moyen:.1f} ans")
-
-# --- 5. GRAPHIQUES ---
+# --- 4. GRAPHIQUES ---
 
 # =====================================================================
-# Graphique 1 : Âge (Volume) -> LIMITÉ À 50 ANS
+# Graphique 1 : Dynamique mensuelle (Focus 2023+)
+# =====================================================================
+
+st.subheader("📅 Tendances mensuelles des fermetures depuis 2023")
+
+st.write(f"Dernière mise à jour INSEE : {st.session_state['df']['Date_fermeture_finale'].max()}")
+
+with st.container(border=True):
+
+    # Filtrage des données pour 2023+
+    df_comp = df_selection[(df_selection["fermeture"] == 1) & (df_selection["Date_fermeture_finale"].notna())].copy()
+    df_comp['Année'] = df_comp["Date_fermeture_finale"].dt.year
+    df_comp['Mois'] = df_comp["Date_fermeture_finale"].dt.month
+    df_clean = df_comp.query("Année >= 2023")
+
+    if not df_clean.empty:
+        df_pivot = df_clean.pivot_table(
+            index="Mois", columns="Année", values="fermeture", aggfunc="count", fill_value=0
+        )
+        
+        mois_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
+
+        fig_comp = px.bar(
+            df_pivot, 
+            barmode='group', 
+            template='plotly_white', 
+            height=400,
+            labels={"value": "Nombre de fermetures", "Mois": "Mois"},
+            color_discrete_sequence=["#4C759F", "#94A3B8", "#6B2C6B", "#E67E22"]
+        )
+        
+        fig_comp.update_traces(
+            hovertemplate=(
+                "<b>%{fullData.name}</b><br>" +
+                "Mois : <b>%{x}</b><br>" +
+                "Fermetures : <b>%{y:,.0f}</b><extra></extra>"
+            )
+        )
+
+        fig_comp.update_layout(
+            xaxis=dict(tickmode='array', tickvals=list(range(1, 13)), ticktext=mois_labels),
+            yaxis_title="Nombre de fermetures",
+            legend_title_text="Année",
+            margin=dict(l=20, r=20, t=20, b=20)
+        )
+        
+        st.plotly_chart(fig_comp, use_container_width=True, key="chart_monthly_comparison")
+
+# --- 2. ANALYSE DU FLUX ---
+last_date = df_clean["Date_fermeture_finale"].max()
+totals_par_an = df_pivot.sum()
+
+# Calcul des messages narratifs
+parts = []
+if 2023 in totals_par_an and 2024 in totals_par_an:
+    var_23_24 = ((totals_par_an[2024] - totals_par_an[2023]) / totals_par_an[2023]) * 100
+    parts.append(f"Le volume de fermetures a évolué de **{var_23_24:+.1f}%** entre 2023 et 2024.")
+
+if 2025 in totals_par_an:
+    parts.append(f"L'année **2025** affiche un total consolidé de **{int(totals_par_an[2025]):,}** fermetures.".replace(",", " "))
+
+if 2026 in totals_par_an:
+    date_str = format_date_fr(last_date)
+    parts.append(f"Pour **2026**, le cumul au **{date_str}** enregistre déjà **{int(totals_par_an[2026]):,}** cessations.".replace(",", " "))
+
+# Affichage final
+st.markdown(f"> **Analyse du flux :** {' '.join(parts)}")
+
+# ---  CALCULS DES TAUX (Historique vs Périodes) ---
+annee_min = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.min()
+nb_annees_total = max(1, (2026 - annee_min + 1))
+taux_hist = (df_selection["fermeture"].mean() * 100) / nb_annees_total
+
+# Fonction utilitaire pour calculer le taux annuel sur une période donnée
+def get_taux_annuel(df_data, n_annees):
+    # Fixer la fin de la période au 31/12/2025 pour avoir des années pleines
+    annee_fin = 2025
+    annee_debut = annee_fin - n_annees + 1
+    
+    # 1. On ne prend que les sociétés existantes ou fermées AVANT 2026
+    df_window = df_data[
+        (df_data["Date_fermeture_finale"].isna()) | 
+        (df_data["Date_fermeture_finale"].dt.year <= annee_fin)
+    ].copy()
+    
+    # 2. On compte les fermetures sur la fenêtre (ex: 2024-2025)
+    nb_fermetures = len(df_window[
+        (df_window["fermeture"] == 1) & 
+        (df_window["Date_fermeture_finale"].dt.year >= annee_debut)
+    ])
+    
+    # 3. Calcul du taux annuel moyen
+    taux = (nb_fermetures / len(df_window) * 100) / n_annees
+    return taux
+
+taux_3ans = get_taux_annuel(df_selection, 3)
+taux_2ans = get_taux_annuel(df_selection, 2)
+taux_2025 = get_taux_annuel(df_selection, 1)
+
+# --- CALCUL DES ÂGES (À placer juste après tes calculs de taux) ---
+def get_age_moyen(df_data, n_annees):
+    annee_fin = 2025
+    annee_debut = annee_fin - n_annees + 1
+    df_fermes_window = df_data[
+        (df_data["fermeture"] == 1) & 
+        (df_data["Date_fermeture_finale"].dt.year >= annee_debut) & 
+        (df_data["Date_fermeture_finale"].dt.year <= annee_fin)
+    ]
+    return df_fermes_window["age_estime"].mean() if len(df_fermes_window) > 0 else 0
+
+age_hist = df_selection[df_selection["fermeture"] == 1]["age_estime"].mean()
+age_3ans = get_age_moyen(df_selection, 3)
+age_2ans = get_age_moyen(df_selection, 2)
+age_2025 = get_age_moyen(df_selection, 1)
+
+
+# --- AFFICHAGE DES KPI ---
+st.subheader("📊 Evolution du taux de fermeture et de l'âge.")
+
+with st.container(border=True):
+    # Ligne 1 : Les Taux (Utilisation de symboles techniques)
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Taux Historique", f"{taux_hist:.2f}%")
+    c2.metric("Taux (3 ans)", f"{taux_3ans:.2f}%", delta=f"{taux_3ans-taux_hist:+.2f}%", delta_color="inverse")
+    c3.metric("Taux (2 ans)", f"{taux_2ans:.2f}%", delta=f"{taux_2ans-taux_hist:+.2f}%", delta_color="inverse")
+    c4.metric("Taux 2025", f"{taux_2025:.2f}%", delta=f"{taux_2025-taux_hist:+.2f}%", delta_color="inverse")
+    
+    st.markdown("---") # Séparation fine
+    
+    # Ligne 2 : Les Âges (Utilisation de symboles de durée/temps)
+    a1, a2, a3, a4 = st.columns(4)
+    a1.metric("Âge moyen (Hist.)", f"{age_hist:.1f} ans")
+    a2.metric("Âge moyen (3 ans)", f"{age_3ans:.1f} ans")
+    a3.metric("Âge moyen (2 ans)", f"{age_2ans:.1f} ans")
+    a4.metric("Âge moyen (2025)", f"{age_2025:.1f} ans")
+
+# --- AJOUTER CECI APRÈS LE BLOC KPI ---
+df_fermes = df_selection[df_selection["fermeture"] == 1]
+age_moyen = df_fermes["age_estime"].mean() if len(df_fermes) > 0 else 0
+
+# --- 1. DÉFINITION DES UTILITAIRES DE DATE ---
+def format_date_fr(date_obj):
+    mois_fr = [
+        "", "janvier", "février", "mars", "avril", "mai", "juin", 
+        "juillet", "août", "septembre", "octobre", "novembre", "décembre"
+    ]
+    return f"{date_obj.day} {mois_fr[date_obj.month]} {date_obj.year}"
+
+# --- 3. NOTE TECHNIQUE ---
+with st.expander("📝 Note sur la saisonnalité et les données"):
+    st.markdown(f"""
+    * L'année **2025** est présentée dans son intégralité.
+    * Les données pour l'année en cours (**2026**) sont consolidées jusqu'au **{format_date_fr(last_date)}**.
+    * Les pics de fin d'année restent structurellement liés aux clôtures comptables et régularisations administratives.
+    """)
+
+
+# =====================================================================
+# Graphique 2 : Âge (Volume) -> LIMITÉ À 50 ANS
 # =====================================================================
 st.subheader("🕰️ Analyse de la pérennité")
 
@@ -142,16 +265,12 @@ st.info("""
     """)
 
 # =====================================================================
-# Graphique 2 : Probabilité (INDICE DE VULNÉRABILITÉ JUSQU'À 49 ANS)
+# Graphique 3 : Probabilité (INDICE DE VULNÉRABILITÉ JUSQU'À 49 ANS)
 # =====================================================================
-st.subheader("📈 Dynamique de fermeture : l'indice de vulnérabilité par âge")
+st.subheader("📈 Evolution du risque de fermeture selon l'âge")
 
 with st.container(border=True):
-    st.markdown("""
-    Ce graphique mesure la **fragilité relative** des entreprises. 
-    Il répond à la question : *Si l'entreprise a atteint l'âge X, quel est son risque statistique d'enregistrer une fermeture au cours de l'exercice ?*
-    """)
-    
+        
     age_ans_temp = df_selection["age_estime"].round(0).astype(int)
 
     annee_min = df_selection[df_selection["fermeture"] == 1]["Date_fermeture_finale"].dt.year.min()
@@ -256,72 +375,23 @@ with st.container(border=True):
                 L'exposition au risque est ici liée à des enjeux de second cycle de croissance ou à un besoin de pivot stratégique du modèle économique.
                 """)
 
-# =====================================================================
-# Graphique 3 : Mensuel -> S'ARRÊTE EN MARS 2026 DE MANIÈRE NATURELLE
-# =====================================================================
-st.subheader("📅 Dynamique mensuelle et comparaison annuelle")
-
 with st.container(border=True):
-    st.markdown("""
-    Cette analyse permet de visualiser si les fermetures s'accélèrent ou ralentissent d'un mois sur l'autre par rapport aux années précédentes. 
-    """)
+    col_a, col_b = st.columns([1, 1], gap="large")
 
-    df_comp = df_selection[(df_selection["fermeture"] == 1) & (df_selection["Date_fermeture_finale"].notna())].copy()
-    
-    if not df_comp.empty:
-        df_comp['Année'] = df_comp["Date_fermeture_finale"].dt.year
-        df_comp['Mois'] = df_comp["Date_fermeture_finale"].dt.month
+    with col_a:
+        st.markdown("#### 🛠️ Cadre Technique")
+        st.info("""
+        * 🏛️ **Structures :** Focus sur les **SAS & SARL**.
+        * 📂 **Source :** Données Insee / Bilans INPI.
+        * 🌍 **Géo :** France Métropolitaine & DOM.
+        """)
 
-        df_clean = df_comp.query("Année >= 2023")
+    with col_b:
+        st.markdown("#### 💡 Vision Métier")
+        st.success("""
+        * 🎯 **Données qualifiées :** Base contrôlée (Pappers/INSEE).
+        * ⚖️ **Rigueur :** Historique consolidé depuis **1975**.
+        * 📉 **Sémantique :** Étude des conditions de fermeture.
+        """)
 
-        df_pivot = df_clean.pivot_table(
-            index="Mois", columns="Année", values="fermeture", aggfunc="count", fill_value=0
-        )
-        
-        mois_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
-
-        fig_comp = px.bar(
-            df_pivot, 
-            barmode='group', 
-            template='plotly_white', 
-            height=400,
-            labels={"value": "Nombre de fermetures", "Mois": "Mois"},
-            color_discrete_sequence=["#4C759F", "#94A3B8", "#6B2C6B", "#E67E22"]
-        )
-        
-        fig_comp.update_layout(
-            xaxis=dict(tickmode='array', tickvals=list(range(1, 13)), ticktext=mois_labels),
-            yaxis_title="Nombre de fermetures",
-            legend_title_text="Année",
-            margin=dict(l=20, r=20, t=20, b=20)
-        )
-        
-        st.plotly_chart(fig_comp, use_container_width=True, key="chart_monthly_comparison")
-
-        if 2023 in df_pivot.columns and 2024 in df_pivot.columns:
-            total_23 = df_pivot[2023].sum()
-            total_24 = df_pivot[2024].sum()
-            var_23_24 = ((total_24 - total_23) / total_23) * 100
-            
-            msg_complement = ""
-            if 2025 in df_pivot.columns:
-                total_25 = df_pivot[2025].sum()
-                msg_complement += f" L'année **2025** affiche un total consolidé de **{total_25:,}** fermetures.".replace(",", " ")
-            
-            if 2026 in df_pivot.columns:
-                total_26_t1 = df_pivot[2026].sum()
-                msg_complement += f" Pour **2026**, le premier trimestre (Janvier-Mars) enregistre déjà **{total_26_t1:,}** cessations.".replace(",", " ")
-
-            st.markdown(f"""
-            > **Analyse du flux :** Le volume de fermetures a évolué de **{var_23_24:+.1f}%** entre 2023 et 2024.{msg_complement}
-            """)
-
-        with st.expander("📝 Note sur la saisonnalité et les données"):
-            st.write("""
-            * L'année **2025** est présentée dans son intégralité.
-            * Les données pour l'année en cours (**2026**) s'arrêtent au **31 mars** conformément aux dernières données injectées dans le pipeline.
-            * Les pics de fin d'année restent structurellement liés aux clôtures comptables et régularisations administratives.
-            """)
-
-st.divider()
 st.caption("ℹ️ Source : Base SIRENE & Infogreffe | Focus méthodologique : SAS & SARL.")

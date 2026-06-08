@@ -8,10 +8,10 @@ st.set_page_config(page_title="Firmographie - Secteurs", layout="wide")
 
 # --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
 if 'df' in st.session_state and st.session_state['df'] is not None:
-    # 🎯 On récupère la base globale chargée sur la main
+    # On récupère la base globale chargée sur la main
     df_raw = st.session_state['df']
     
-    # 🎯 On recrée ton optimisation RAM localement sans re-télécharger le fichier
+    # On recrée l'optimisation RAM localement sans re-télécharger le fichier
     required_columns = [
         "Code du département de l'établissement",
         "fermeture",
@@ -27,27 +27,41 @@ if 'df' in st.session_state and st.session_state['df'] is not None:
         if col in df.columns:
             df[col] = df[col].astype("category")
 else:
-    # Sécurité Hugging Face
-    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
-    st.info("💡 *Pourquoi ? Le dataset global s'initialise uniquement sur la page principale pour garantir la fluidité des filtres.*")
+    st.warning("⚠️ Session rafraîchie. Veuillez repasser par la page d'accueil.")
     st.stop()
 
 # --- 2. FILTRES SIDEBAR ---
 with st.sidebar:
-    st.image("https://img.icons8.com/fluency/96/factory.png", width=60)
-    st.title("Filtres")
-    st.header("📍 Géographie")
     
-    # Extraction des départements (gestion propre du type category)
+    # 1. GÉOGRAPHIE
+    st.header("📍 Secteur Géographique")
     depts = sorted(df["Code du département de l'établissement"].dropna().unique().astype(str).tolist())
     dept_options = ["Toute la France"] + depts
     dept_sel = st.selectbox("Département :", options=dept_options, index=0, key="sb_secteurs_dept")
     
-    if dept_sel == "Toute la France":
-        df_selection = df
-    else:
-        df_selection = df[df["Code du département de l'établissement"].astype(str) == dept_sel]
+    # 2. PÉRIODE
+    st.header("📅 Période Choisie")
+    options_periode = {
+        "3 dernières années": 3,
+        "2 dernières années": 2,
+        "Année de référence (2025)": 1,
+        "Tout l'historique": 0
+    }
+    periode_sel = st.radio("Horizon temporel :", list(options_periode.keys()), key="sb_periode")
     
+    # --- FILTRAGE ENCHAÎNÉ PROPRE ---
+    df_temp = df.copy()
+    
+    if dept_sel != "Toute la France":
+        df_temp = df_temp[df_temp["Code du département de l'établissement"].astype(str) == dept_sel]
+    
+    if options_periode[periode_sel] > 0:
+        # En remplaçant 2026 par 2025, on décale la fenêtre d'analyse
+        annee_limite = 2025 - options_periode[periode_sel] + 1
+        df_temp = df_temp[df_temp["Date_fermeture_finale"].dt.year >= annee_limite]
+        
+    df_selection = df_temp
+        
     st.divider()
     st.metric("Périmètre", f"{len(df_selection):,}".replace(',', ' '), delta="Unités")
 
@@ -58,13 +72,12 @@ df_fermes_only = df_selection[df_selection["fermeture"] == 1].copy()
 top_secteurs_list = df_fermes_only['libelle_section_ape'].value_counts().head(10).index.astype(str).tolist()
 
 # --- 4. TITRE ET TOP SECTEURS ---
-st.title("📊 2. Dynamique des Secteurs d'Activité")
-st.markdown("Identification des zones de fragilité par code APE et section d'activité.")
+st.title("📊 2. Les Secteurs d'Activité")
 
-st.subheader("🏭 Top 10 des secteurs les plus exposés")
+st.subheader("🏭 Les 10 secteurs les plus exposés selon votre sélection")
 
 with st.container(border=True):
-    st.markdown("*Volume total de fermetures enregistrées sur la période.*")
+
     if not df_fermes_only.empty:
 
         top_ape = (
@@ -137,79 +150,58 @@ with st.container(border=True):
                 st.warning("Données insuffisantes pour comparer ces secteurs avec cette rigueur statistique.")
 
 # --- 6. HEATMAP DYNAMIQUE ---
-if top_secteurs_list:
-    # 1. Identifier de manière dynamique la dernière année complète disponible
-    annees_fermetures = df_selection["Date_fermeture_finale"].dt.year.dropna().unique().astype(int)
+st.subheader("🌡️ Heatmap : Saisonnalité des fermetures")
+
+with st.container(border=True):
+    # 1. Sélectionner uniquement les années COMPLÈTES pour la moyenne
+    from datetime import datetime
+    annee_en_cours = datetime.now().year
+    annees_selectionnees = sorted(df_selection["Date_fermeture_finale"].dt.year.dropna().unique().astype(int))
+    annees_pour_moyenne = [a for a in annees_selectionnees if a < annee_en_cours]
     
-    if len(annees_fermetures) > 0:
-        max_annee_data = max(annees_fermetures)
-        
-        # Règle métier : Si l'année la plus récente est 2026 (en cours), on prend 2025 pour avoir un historique complet
-        from datetime import datetime
-        annee_en_cours = datetime.now().year # Dynamiquement 2026
-        
-        if max_annee_data == annee_en_cours and (max_annee_data - 1) in annees_fermetures:
-            annee_heatmap = max_annee_data - 1
-            Explication_annee = f"l'année complète {annee_heatmap} (l'année {max_annee_data} étant en cours)"
-        else:
-            annee_heatmap = max_annee_data
-            Explication_annee = f"l'année {annee_heatmap}"
+    # Si l'utilisateur n'a sélectionné que 2026, on affiche 2026 brut
+    if not annees_pour_moyenne:
+        df_heatmap_raw = df_selection[df_selection["Date_fermeture_finale"].dt.year == annee_en_cours]
+        diviseur = 1
+        annee_str = "2026 (données brutes)"
     else:
-        annee_heatmap = 2025 # Fallback de sécurité
-        Explication_annee = "l'année 2025"
+        df_heatmap_raw = df_selection[df_selection["Date_fermeture_finale"].dt.year.isin(annees_pour_moyenne)]
+        diviseur = len(annees_pour_moyenne)
+        annee_str = f"moyenne {min(annees_pour_moyenne)}-{max(annees_pour_moyenne)}"
 
-    st.subheader(f"🌡️ Heatmap : Intensité des fermetures par mois ({annee_heatmap})")
-
-    with st.container(border=True):
-        st.markdown(f"Détection de la **saisonnalité sectorielle** basée sur {Explication_annee}.")
+    # 2. Calcul du pivot
+    if not df_heatmap_raw.empty:
+        # --- On restreint ici aux 10 secteurs identifiés en amont ---
+        df_heatmap_raw = df_heatmap_raw[df_heatmap_raw["libelle_section_ape"].astype(str).isin(top_secteurs_list)]
         
-        mois_labels = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"]
+        df_pivot_heat = (
+            df_heatmap_raw.assign(Mois_num = lambda x: x["Date_fermeture_finale"].dt.month)
+            .groupby(["libelle_section_ape", "Mois_num"], observed=True).size().reset_index(name="Nb")
+            .assign(Nb = lambda x: (x["Nb"] / diviseur).round(1))
+            .pivot(index="libelle_section_ape", columns="Mois_num", values="Nb").fillna(0)
+            .reindex(columns=range(1, 13), fill_value=0)
+        )
 
-        # Cast en str pour la robustesse avec les catégories
-        df_selection_copy = df_selection.copy()
-        df_selection_copy['libelle_section_ape_str'] = df_selection_copy['libelle_section_ape'].astype(str)
+        fig_heat = px.imshow(
+            df_pivot_heat, 
+            x=["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Août", "Sep", "Oct", "Nov", "Déc"], 
+            color_continuous_scale="YlOrRd", 
+            text_auto=True, 
+            aspect="auto",
+            labels=dict(x="Mois", y="Secteur", color="Moy. Mens.")
+        )
         
-        # Filtrage basé sur l'année calculée dynamiquement
-        df_heatmap_raw = df_selection_copy[
-            (df_selection_copy["fermeture"] == 1) & 
-            (df_selection_copy["Date_fermeture_finale"].dt.year == annee_heatmap) &
-            (df_selection_copy["libelle_section_ape_str"].isin(top_secteurs_list))
-        ].copy()
-
-        if not df_heatmap_raw.empty:
-            df_pivot_heat = (
-                df_heatmap_raw.assign(Mois_num = lambda x: x["Date_fermeture_finale"].dt.month)
-                .groupby(["libelle_section_ape_str", "Mois_num"], observed=True).size().reset_index(name="Nb")
-                .pivot(index="libelle_section_ape_str", columns="Mois_num", values="Nb").fillna(0)
-                .reindex(columns=range(1, 13), fill_value=0)
-            )
-
-            fig_heat = px.imshow(
-                df_pivot_heat, 
-                x=mois_labels, 
-                color_continuous_scale="YlOrRd", 
-                text_auto=True, 
-                aspect="auto",
-                labels=dict(x="Mois", y="Secteur", color="Fermetures")
-            )
-            
-            fig_heat.update_traces(
-                hovertemplate="<b>Secteur :</b> %{y}<br><b>Mois :</b> %{x}<br><b>Fermetures :</b> %{z} entités<extra></extra>"
-            )
-
-            fig_heat.update_layout(
-                height=500, 
-                margin=dict(l=200, r=20, t=20, b=20), 
-                coloraxis_showscale=False, 
-                xaxis_title=None, 
-                yaxis_title=None
-            )
-            st.plotly_chart(fig_heat, use_container_width=True)
-
-            with st.chat_message("assistant"):
-                st.markdown(f"**Analyse :** La heatmap met en évidence les périodes critiques par secteur sur **{annee_heatmap}**. Les pics structurels de fermeture observés à intervalles réguliers révèlent l'effet des échéances comptables et déclaratives de fin de trimestre.")
-        else:
-            st.info(f"ℹ️ Données {annee_heatmap} insuffisantes pour générer la Heatmap.")
+        fig_heat.update_layout(height=500, margin=dict(l=200, r=20, t=20, b=20), coloraxis_showscale=False)
+        st.plotly_chart(fig_heat, use_container_width=True)
+        
+        # Commentaire dynamique de l'assistant
+        with st.chat_message("assistant"):
+            if len(annees_selectionnees) > 1:
+                st.markdown(f"**Analyse :** Cette heatmap affiche une moyenne mensuelle lissée sur la période sélectionnée. Les zones sombres identifient les pics de saisonnalité récurrents.")
+            else:
+                st.markdown(f"**Analyse :** Cette heatmap présente les données pour **l'année {annees_selectionnees[0]}**. Elle met en lumière les points de friction spécifiques.")
+    else:
+        st.info("Sélectionnez une période contenant des données pour afficher la Heatmap.")
 
 st.divider()
 st.caption("ℹ️ Source : Base SIRENE & Bilans Publics | Focus méthodologique : SAS & SARL.")

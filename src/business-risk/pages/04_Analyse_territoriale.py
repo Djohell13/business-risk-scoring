@@ -7,253 +7,137 @@ import requests
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Analyse territoriale", layout="wide")
 
-# On garde le GeoJSON ici car il est exclusif aux cartes de cette page
 @st.cache_data
 def get_geojson():
-    """Récupère le fond de carte des départements français"""
     repo_url = "https://raw.githubusercontent.com/gregoiredavid/france-geojson/master/departements-version-simplifiee.geojson"
-    try: 
-        return requests.get(repo_url).json()
-    except: 
-        return None
+    try: return requests.get(repo_url).json()
+    except: return None
 
-# --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
 if 'df' in st.session_state and st.session_state['df'] is not None:
-    # 🎯 Récupération directe depuis la page main
     df = st.session_state['df']
 else:
-    # Sécurité Hugging Face
-    st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
-    st.info("💡 *Pourquoi ? Le dataset global est volumineux et s'initialise uniquement sur la page principale pour optimiser les performances.*")
+    st.warning("⚠️ Session rafraîchie. Veuillez repasser par la page d'accueil.")
     st.stop()
 
-# Récupération du GeoJSON (spécifique à cette page)
 geojson_france = get_geojson()
 
-# --- SÉCURISATION & HARMONISATION DES DEPARTEMENTS ---
-
+# --- SÉCURISATION & HARMONISATION ---
 df_geo = df.copy()
-col_brute = "Code du département de l'établissement"
+if "Code du département de l'établissement" in df_geo.columns:
+    df_geo = df_geo.rename(columns={"Code du département de l'établissement": "dept_code"})
+df_geo["dept_code"] = df_geo["dept_code"].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(2)
 
-if col_brute in df_geo.columns:
-    df_geo = df_geo.rename(columns={col_brute: "dept_code"})
+# --- 2. FILTRE TEMPOREL (Sidebar) ---
+with st.sidebar:
+    st.header("📅 Période choisie")
+    options_periode = {
+        "Tout l'historique": 0,
+        "3 dernières années": 3,
+        "2 dernières années": 2,
+        "Année de référence (2025)": 1
+    }
+    periode_sel = st.radio("Horizon pour les cartes nationales :", list(options_periode.keys()))
 
-if "dept_code" in df_geo.columns:
-    df_geo["dept_code"] = df_geo["dept_code"].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(2)
+    df_stats = df_geo.copy()
+    if options_periode[periode_sel] > 0:
+        annee_limite = 2025 - options_periode[periode_sel] + 1
+        mask = (df_stats["fermeture"] == 0) | (
+            (df_stats["fermeture"] == 1) & (df_stats["Date_fermeture_finale"].dt.year >= annee_limite)
+        )
+        df_stats = df_stats[mask]
 
-# Récupération du GeoJSON
-geojson_france = get_geojson()
-
-# Calculs temporels de base
-annee_min = df_geo["Date_fermeture_finale"].dt.year.min()
-annee_max = df_geo["Date_fermeture_finale"].dt.year.max()
+annee_min = df_stats["Date_fermeture_finale"].dt.year.min()
+annee_max = df_stats["Date_fermeture_finale"].dt.year.max()
 nb_annees = max(1, (annee_max - annee_min + 1)) if not pd.isna(annee_min) else 1
 
 # --- TITRE ---
 st.title("🗺️ 4. Analyse Territoriale")
 st.markdown("Analyse comparative des dynamiques de fermeture et de la maturité des tissus économiques par département.")
 
-# --- CARTE 1 : INDICE DE FERMETURE ---
-df_dept_stats = df_geo.groupby("dept_code").agg(taux_brut=("fermeture", "mean")).reset_index()
+# --- CARTE 1 ---
+df_dept_stats = df_stats.groupby("dept_code").agg(taux_brut=("fermeture", "mean")).reset_index()
 df_dept_stats["taux_pct"] = ((df_dept_stats["taux_brut"] * 100) / nb_annees).round(2)
-moy_nat_annuelle = ((df_geo["fermeture"].mean() * 100) / nb_annees)
-
-vmin = df_dept_stats["taux_pct"].quantile(0.05)
-vmax = df_dept_stats["taux_pct"].quantile(0.95)
+moy_nat_annuelle = ((df_stats["fermeture"].mean() * 100) / nb_annees)
+vmin, vmax = df_dept_stats["taux_pct"].quantile(0.05), df_dept_stats["taux_pct"].quantile(0.95)
 
 st.subheader("📍 Indice de Fermeture annuelle par département")
-
 with st.container(border=True):
     st.markdown(f"**Moyenne Nationale : {moy_nat_annuelle:.2f}%**")
     if geojson_france:
-        nuanced_scale = [
-            [0.0, "#1E3A8A"], 
-            [0.3, "#93C5FD"], 
-            [0.5, "#FFFFFF"], 
-            [0.7, "#FDBA74"],  
-            [1.0, "#B91C1C"]   
-        ]
-
-        fig_map = px.choropleth(
-            df_dept_stats, geojson=geojson_france, locations="dept_code",
-            featureidkey="properties.code", color="taux_pct",
-            color_continuous_scale=nuanced_scale, 
-            range_color=[vmin, vmax], 
-            scope="europe", height=600,
-            custom_data=[df_dept_stats["taux_pct"].round(2)]
-        )
+        fig_map = px.choropleth(df_dept_stats, geojson=geojson_france, locations="dept_code", featureidkey="properties.code", color="taux_pct",
+                                color_continuous_scale=[[0.0, "#1E3A8A"], [0.3, "#93C5FD"], [0.5, "#FFFFFF"], [0.7, "#FDBA74"], [1.0, "#B91C1C"]], 
+                                range_color=[vmin, vmax], scope="europe", height=600, custom_data=[df_dept_stats["taux_pct"].round(2)])
         fig_map.update_geos(fitbounds="locations", visible=False)
         fig_map.update_traces(hovertemplate="<b>Département %{location}</b><br>Taux de fermeture : %{customdata[0]:.2f}%<extra></extra>")
-        fig_map.update_layout(
-            margin={"r":0, "t":0, "l":0, "b":0},
-            coloraxis_colorbar=dict(
-                title="Taux (%)",
-                yanchor="middle", y=0.5,
-                ticks="outside",
-                tickvals=[vmin, moy_nat_annuelle, vmax],
-                ticktext=[f"Sain ({vmin:.1f}%)", "Moyenne", f"Alerte ({vmax:.1f}%)"],
-                len=0.7 
-            )
-        )
+        fig_map.update_layout(margin={"r":0, "t":0, "l":0, "b":0}, coloraxis_colorbar=dict(title="Taux (%)", tickvals=[vmin, moy_nat_annuelle, vmax], ticktext=[f"Sain ({vmin:.1f}%)", "Moyenne", f"Alerte ({vmax:.1f}%)"], len=0.7))
         st.plotly_chart(fig_map, use_container_width=True)
-    else:
-        st.warning("⚠️ Impossible de charger le fond de carte GeoJSON.")
 
 # --- ANALYSE DES DISPARITÉS ---
 with st.chat_message("assistant"):
     st.markdown("### 🔍 Analyse de l'écart à la moyenne")
-    st.markdown(f"Comparaison des dynamiques locales par rapport au référentiel national de **{moy_nat_annuelle:.2f}%**.")
-    
     col_stable, col_fragile = st.columns(2)
     df_metro = df_dept_stats[df_dept_stats["dept_code"].str.len() <= 2].copy()
-    
     with col_stable:
         st.markdown("#### 🟢 Zones de Haute Stabilité")
-        top_3_stable = df_metro.sort_values("taux_pct").head(3)
-        for i, (idx, r) in enumerate(top_3_stable.iterrows(), 1):
-            delta = r['taux_pct'] - moy_nat_annuelle
-            with st.container(border=True):
-                c_label, c_val = st.columns([2, 1])
-                c_label.markdown(f"**{i}er : Dept {r['dept_code']}**")
-                c_val.markdown(f"#### :green[{r['taux_pct']}%]")
-                st.caption(f"📉 {delta:.2f} pts sous la moyenne nationale")
-
+        for i, (idx, r) in enumerate(df_metro.sort_values("taux_pct").head(3).iterrows(), 1):
+            st.markdown(f"**{i}er : Dept {r['dept_code']}** : :green[{r['taux_pct']}%]")
     with col_fragile:
         st.markdown("#### 🔴 Zones de Vigilance")
-        top_3_fragile = df_metro.sort_values("taux_pct", ascending=False).head(3)
-        for i, (idx, r) in enumerate(top_3_fragile.iterrows(), 1):
-            delta = r['taux_pct'] - moy_nat_annuelle
-            with st.container(border=True):
-                c_label, c_val = st.columns([2, 1])
-                c_label.markdown(f"**{i}er : Dept {r['dept_code']}**")
-                c_val.markdown(f"#### :red[{r['taux_pct']}%]")
-                st.caption(f"📈 +{delta:.2f} pts au-dessus de la moyenne")
-
-st.divider()
-
-# --- CARTES 2 & 3 : MATURITÉ & LONGÉVITÉ ---
-st.subheader("🛡️ Résilience et Longévité")
-st.markdown("""
-Cette section analyse la **solidité structurelle** des territoires. 
-* **La Maturité** observe le stock actuel : quelle part du tissu économique a déjà survécu aux 10 premières années ?
-* **La Longévité** analyse les fermetures : à quel âge moyen les entreprises de ce département finissent-elles par s'arrêter ?
-""")
-
-tab1, tab2 = st.tabs(["🛡️ Taux de Maturité (+10 ans)", "⏳ Durée de vie moyenne"])
-
-with tab1:
-    with st.container(border=True):
-        df_resilience = df_geo[df_geo["fermeture"] == 0].groupby("dept_code").agg(
-            total=("age_estime", "count"), 
-            plus_de_10ans=("age_estime", lambda x: (x > 10).sum())
-        ).reset_index()
-        df_resilience["taux_vieux"] = (df_resilience["plus_de_10ans"] / df_resilience["total"] * 100).round(2)
-        moy_maturite = df_resilience["taux_vieux"].mean()
-
-        if geojson_france:
-            fig_res = px.choropleth(
-                df_resilience, geojson=geojson_france, locations="dept_code",
-                featureidkey="properties.code", color="taux_vieux",
-                color_continuous_scale="YlGn", scope="europe", height=600
-            )
-            fig_res.update_geos(fitbounds="locations", visible=False)
-            fig_res.update_traces(hovertemplate="<b>Département %{location}</b><br>Part +10 ans : %{z:.1f}%<extra></extra>")
-            fig_res.update_layout(margin={"r":0, "t":0, "l":0, "b":0}, coloraxis_colorbar=dict(title="%"))
-            st.plotly_chart(fig_res, use_container_width=True)
-
-        top_mat = df_resilience[df_resilience["dept_code"].str.len() <= 2].sort_values("taux_vieux", ascending=False).head(3)
-        st.write(f"💡 **Note :** La moyenne nationale de maturité est de **{moy_maturite:.1f}%**. Les tissus les plus ancrés se trouvent en : " + 
-                 ", ".join([f"**Dept {r['dept_code']}** ({r['taux_vieux']}%)" for _, r in top_mat.iterrows()]))
-
-with tab2:
-    with st.container(border=True):
-        df_life = df_geo[df_geo["fermeture"] == 1].groupby("dept_code")["age_estime"].mean().reset_index()
-        moy_longevite = df_life["age_estime"].mean()
-
-        if geojson_france:
-            fig_life = px.choropleth(
-                df_life, geojson=geojson_france, locations="dept_code",
-                featureidkey="properties.code", color="age_estime", 
-                color_continuous_scale="Purples", scope="europe", height=600
-            )
-            fig_life.update_geos(fitbounds="locations", visible=False)
-            fig_life.update_traces(hovertemplate="<b>Département %{location}</b><br>Âge moyen fermeture : %{z:.1f} ans<extra></extra>")
-            fig_life.update_layout(margin={"r":0, "t":0, "l":0, "b":0}, coloraxis_colorbar=dict(title="Ans"))
-            st.plotly_chart(fig_life, use_container_width=True)
-
-        top_life = df_life[df_life["dept_code"].str.len() <= 2].sort_values("age_estime", ascending=False).head(3)
-        st.write(f"⏳ **Analyse :** En moyenne, une entreprise ferme après **{moy_longevite:.1f} ans** d'existence. Record de longévité constaté en : " + 
-                 ", ".join([f"**Dept {r['dept_code']}** ({r['age_estime']:.1f} ans)" for _, r in top_life.iterrows()]))
-
-st.divider()
+        for i, (idx, r) in enumerate(df_metro.sort_values("taux_pct", ascending=False).head(3).iterrows(), 1):
+            st.markdown(f"**{i}er : Dept {r['dept_code']}** : :red[{r['taux_pct']}%]")
 
 # --- 4. ZOOM MAPBOX DÉTAILLÉ ---
 st.subheader("🎯 Explorateur de proximité")
-st.markdown("_Identifiez les dynamiques de quartier en zoomant directement sur la carte. Plus le point est large, plus l'entreprise est solide en effectifs._")
 
 with st.container(border=True):
-    c_dep, c_sec, c_info = st.columns([1, 2, 1])
+    c1, c2, c3 = st.columns(3)
     
-    with c_dep:
-        dep_cible = st.selectbox("📍 Département", options=sorted(df_geo["dept_code"].unique()))
-    
-    with c_sec:
+    with c1:
+        dep_cible = st.selectbox("📍 Département", options=sorted(df_geo["dept_code"].unique()), key="map_dept")
+    with c2:
         df_dep_only = df_geo[df_geo["dept_code"] == dep_cible].copy()
         secteurs_df = df_dep_only[['code_ape', 'libelle_section_ape']].drop_duplicates().dropna()
         secteurs_df["label"] = secteurs_df["code_ape"].astype(str) + " – " + secteurs_df["libelle_section_ape"].astype(str)
-        secteurs = secteurs_df.sort_values("label")
-        secteur_choisi = st.selectbox("🏭 Secteur d'activité", options=["Tous Secteurs"] + secteurs["label"].tolist())
+        secteur_choisi = st.selectbox("🏭 Secteur d'activité", options=["Tous Secteurs"] + secteurs_df["label"].sort_values().tolist(), key="map_secteur")
+    with c3:
+        st.markdown("<br>", unsafe_allow_html=True)
+        st.caption(f"Horizon temporel : **{periode_sel}**")
 
-    df_loc = df_dep_only.copy()
+    # --- Calcul des indicateurs ---
+    df_taux_filter = df_stats[df_stats["dept_code"] == dep_cible].copy()
     if secteur_choisi != "Tous Secteurs":
-        ape_code_extract = secteur_choisi.split(" – ")[0]
-        df_loc = df_loc[df_loc["code_ape"].astype(str) == ape_code_extract]
+        ape_code = secteur_choisi.split(" – ")[0]
+        df_taux_filter = df_taux_filter[df_taux_filter["code_ape"].astype(str) == ape_code]
+    t_loc = ((df_taux_filter["fermeture"].mean() * 100) / nb_annees).round(2) if not df_taux_filter.empty else 0.0
 
-    if not df_loc.empty:
-        df_loc["code_ape_clean"] = df_loc["code_ape"].astype(str).replace(r'\.0$', '', regex=True)
-        df_loc["age_hover"] = df_loc["age_estime"].fillna(0).round(0).astype(int)
-        df_loc["effectif_val"] = df_loc["Tranche_effectif_num"].fillna(1)
-        df_loc["effectif_hover"] = df_loc["effectif_val"].astype(int)
-        
-        t_loc = ((df_loc["fermeture"].mean() * 100) / nb_annees).round(2)
-        s_loc = round(df_loc[df_loc["fermeture"] == 1]["age_estime"].mean(), 1) if not df_loc[df_loc["fermeture"] == 1].empty else 0
+    df_map = df_dep_only.copy()
+    if secteur_choisi != "Tous Secteurs":
+        df_map = df_map[df_map["code_ape"].astype(str) == secteur_choisi.split(" – ")[0]]
+    
+    s_loc = round(df_map["age_estime"].mean(), 1) if not df_map.empty else 0
 
-        with c_info:
-            st.metric("Établissements", f"{len(df_loc):,}", help="Nombre total d'unités légales sur cette zone.")
+    # --- Affichage des chiffres en métriques (Fixes et fluides) ---
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Établissements actifs", f"{len(df_map):,}")
+    m2.metric("Rotation annuelle", f"{t_loc:.2f}%")
+    m3.metric("Âge moyen", f"{s_loc:.1f} ans")
 
-        st.info(
-            f"💡 **Analyse locale :** Dans le département **{dep_cible}**, "
-            f"le secteur **{secteur_choisi.split(' – ')[-1] if secteur_choisi != 'Tous Secteurs' else 'global'}** "
-            f"affiche une durée de vie moyenne de **{s_loc:.1f} ans**."
-        )
+    # --- Affichage de la carte (Sans l'annotation HTML lourde) ---
+    if not df_map.empty:
+        df_map["effectif_val"] = df_map["Tranche_effectif_num"].fillna(1)
+        df_map["age_hover"] = df_map["age_estime"].fillna(0).round(0).astype(int)
+        df_map["ape_hover"] = df_map["code_ape"].astype(str).replace(r'\.0$', '', regex=True)
 
         fig_mapbox = px.scatter_mapbox(
-            df_loc, lat="latitude", lon="longitude", color="age_estime", size="effectif_val",
+            df_map, lat="latitude", lon="longitude", color="age_estime", size="effectif_val",
             color_continuous_scale="Viridis", size_max=12, hover_name="Dénomination",
-            custom_data=["age_hover", "code_ape_clean", "effectif_hover"],
-            mapbox_style="carto-positron", zoom=8, height=650
+            custom_data=["age_hover", "ape_hover", "effectif_val"],
+            mapbox_style="carto-positron", zoom=8, height=600
         )
         fig_mapbox.update_traces(
             hovertemplate="<b>%{hovertext}</b><br>Effectif : %{customdata[2]}<br>Âge : %{customdata[0]} ans<br>APE : %{customdata[1]}<extra></extra>"
         )
-        fig_mapbox.update_layout(
-            margin={"r":0,"t":0,"l":0,"b":0},
-            annotations=[dict(
-                x=0.01, y=0.99, xref="paper", yref="paper",
-                text=(
-                    f"<span style='font-size:16px; font-weight:bold; color:#1f2937;'>📍 DEPT {dep_cible}</span><br>"
-                    f"<span style='font-size:4px;'> </span><br>" 
-                    f"<span style='font-size:13px; color:#4b5563;'>Rotation :</span> <span style='font-size:13px; font-weight:bold; color:#1f2937;'>{t_loc:.2f}% /an</span><br>"
-                    f"<span style='font-size:13px; color:#4b5563;'>Âge moyen :</span> <span style='font-size:13px; font-weight:bold; color:#1f2937;'>{s_loc:.1f} ans</span><br>"
-                    f"<span style='font-size:13px; color:#4b5563;'>Établissements :</span> <span style='font-size:13px; font-weight:bold; color:#10b981;'>{len(df_loc):,}</span>"
-                ),
-                showarrow=False, align="left", bgcolor="rgba(255, 255, 255, 0.95)", bordercolor="#d1d5db", borderwidth=1, borderpad=12
-            )]
-        )
+        fig_mapbox.update_layout(margin={"r":0,"t":0,"l":0,"b":0})
         st.plotly_chart(fig_mapbox, use_container_width=True, config={'scrollZoom': True})
-        st.caption("🔍 _Astuce : Survolez un point pour découvrir l'identité et les caractéristiques de l'entreprise._")
     else:
-        st.warning("⚠️ Aucune donnée disponible pour cette sélection spécifique. Essayez un autre secteur ou département.")
-
-st.divider()
-st.caption("ℹ️ Source : Base SIRENE & Bilans Publics | Focus méthodologique : SAS & SARL.")
+        st.warning("⚠️ Aucune donnée disponible pour cette sélection.")

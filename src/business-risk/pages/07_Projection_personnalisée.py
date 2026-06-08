@@ -24,8 +24,7 @@ def render_simulation_page():
         df = st.session_state['df']
     else:
         # Sécurité Hugging Face si la session a sauté en cours de route
-        st.warning("⚠️ Session rafraîchie ou expirée. Veuillez repasser brièvement par la page d'accueil pour réinitialiser l'intelligence économique.")
-        st.info("💡 *Pourquoi ? Le dataset global est volumineux et s'initialise uniquement sur la page principale pour optimiser les performances.*")
+        st.warning("⚠️ Session rafraîchie. Veuillez repasser par la page d'accueil.")
         st.stop()
 
     # Identification intelligente des colonnes du dataset
