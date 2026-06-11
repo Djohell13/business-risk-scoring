@@ -12,7 +12,7 @@ else:
     st.stop()
 
 # --- HARMONISATION DES COLONNES ---
-# On renomme pour faciliter le code et assurer la compatibilité
+
 mapping = {
     "Code du département de l'établissement": "dept_code",
     "Economie sociale et solidaire unité légale": "ess_val"

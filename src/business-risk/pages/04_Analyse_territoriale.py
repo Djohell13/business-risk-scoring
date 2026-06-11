@@ -27,7 +27,7 @@ if "Code du département de l'établissement" in df_geo.columns:
     df_geo = df_geo.rename(columns={"Code du département de l'établissement": "dept_code"})
 df_geo["dept_code"] = df_geo["dept_code"].astype(str).str.replace(r'\.0$', '', regex=True).str.zfill(2)
 
-# --- 2. FILTRE TEMPOREL (Sidebar) ---
+# --- 2. FILTRE TEMPOREL ---
 with st.sidebar:
     st.header("📅 Période choisie")
     options_periode = {
@@ -116,13 +116,13 @@ with st.container(border=True):
     
     s_loc = round(df_map["age_estime"].mean(), 1) if not df_map.empty else 0
 
-    # --- Affichage des chiffres en métriques (Fixes et fluides) ---
+    # --- Affichage des chiffres en métriques ---
     m1, m2, m3 = st.columns(3)
     m1.metric("Établissements actifs", f"{len(df_map):,}")
     m2.metric("Rotation annuelle", f"{t_loc:.2f}%")
     m3.metric("Âge moyen", f"{s_loc:.1f} ans")
 
-    # --- Affichage de la carte (Sans l'annotation HTML lourde) ---
+    # --- Affichage de la carte ---
     if not df_map.empty:
         df_map["effectif_val"] = df_map["Tranche_effectif_num"].fillna(1)
         df_map["age_hover"] = df_map["age_estime"].fillna(0).round(0).astype(int)
@@ -141,3 +141,6 @@ with st.container(border=True):
         st.plotly_chart(fig_mapbox, use_container_width=True, config={'scrollZoom': True})
     else:
         st.warning("⚠️ Aucune donnée disponible pour cette sélection.")
+
+st.divider()
+st.caption("ℹ️ Source : Base SIRENE & Infogreffe | Focus méthodologique : SAS & SARL.")

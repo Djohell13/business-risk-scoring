@@ -20,10 +20,8 @@ def render_simulation_page():
     
     # --- 2. RÉCUPÉRATION INTELLIGENTE DES DONNÉES ---
     if 'df' in st.session_state and st.session_state['df'] is not None:
-        # 🎯 Récupération instantanée du dataset global chargé à l'accueil
         df = st.session_state['df']
     else:
-        # Sécurité Hugging Face si la session a sauté en cours de route
         st.warning("⚠️ Session rafraîchie. Veuillez repasser par la page d'accueil.")
         st.stop()
 
@@ -81,7 +79,7 @@ def render_simulation_page():
 
     # --- 4. TRAITEMENT ET AFFICHAGE DES RÉSULTATS ---
     if submit:
-        # Headers avec authentification sécurisée par Token
+
         hf_token = os.environ.get("HF_TOKEN")
         if not hf_token:
             try:

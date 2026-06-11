@@ -37,7 +37,6 @@ with st.sidebar:
     
     if options_periode[periode_sel] > 0:
         annee_limite = 2025 - options_periode[periode_sel] + 1
-        # On garde les fermetures dans la période OU les entreprises toujours ouvertes
         mask = (df_temp["fermeture"] == 0) | (
             (df_temp["fermeture"] == 1) & (df_temp["Date_fermeture_finale"].dt.year >= annee_limite)
         )
@@ -92,14 +91,12 @@ with st.container(border=True):
 st.subheader("👥 Impact selon la taille de l'entreprise")
 
 with st.container(border=True):
-    # Mapping conforme à ton DAG
     tranche_labels = {
         0: "Non employeur / 0 sal.", 1: "1-2 sal.", 2: "3-5 sal.", 3: "6-9 sal.",
         4: "10-19 sal.", 5: "20-49 sal.", 6: "50-99 sal.", 7: "100-199 sal.",
         8: "200-249 sal.", 9: "250-499 sal.", 10: "500-999 sal.", 11: "1000+ sal."
     }
-    
-    # On récupère les données
+
     eff_data_list = [
         df_selection["Tranche_effectif_num"].value_counts().sort_index(),
         df_selection[df_selection["fermeture"] == 1]["Tranche_effectif_num"].value_counts().sort_index(),
@@ -139,12 +136,13 @@ with st.container(border=True):
     )
     st.plotly_chart(fig_eff, use_container_width=True)
 
-    # Analyse focus TPE basée sur ton mapping (0 = non employeur, 1 = 1-2 sal)
     counts_fermes = eff_data_list[1]
     if not counts_fermes.empty:
-        # Calcul : (0 + 1) / total
         tpe_fermes = counts_fermes.loc[counts_fermes.index.isin([0, 1])].sum()
         part_tpe = (tpe_fermes / counts_fermes.sum()) * 100
         
         with st.chat_message("assistant"):
             st.write(f"**Focus TPE :** Les structures de très petite taille (moins de 3 salariés) représentent **{part_tpe:.1f}%** des radiations observées sur la période.")
+
+st.divider()
+st.caption("ℹ️ Source : Base SIRENE & Infogreffe | Focus méthodologique : SAS & SARL.")

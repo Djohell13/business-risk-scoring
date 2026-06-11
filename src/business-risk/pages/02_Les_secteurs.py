@@ -8,10 +8,9 @@ st.set_page_config(page_title="Firmographie - Secteurs", layout="wide")
 
 # --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
 if 'df' in st.session_state and st.session_state['df'] is not None:
-    # On récupère la base globale chargée sur la main
+
     df_raw = st.session_state['df']
-    
-    # On recrée l'optimisation RAM localement sans re-télécharger le fichier
+
     required_columns = [
         "Code du département de l'établissement",
         "fermeture",
@@ -20,8 +19,7 @@ if 'df' in st.session_state and st.session_state['df'] is not None:
         "code_ape",
         "libelle_section_ape"
     ]
-    
-    # On ne garde que ce qui est nécessaire pour cette page et on convertit en catégorie
+
     df = df_raw[required_columns].copy()
     for col in ["Code du département de l'établissement", "code_ape", "libelle_section_ape"]:
         if col in df.columns:
@@ -56,7 +54,6 @@ with st.sidebar:
         df_temp = df_temp[df_temp["Code du département de l'établissement"].astype(str) == dept_sel]
     
     if options_periode[periode_sel] > 0:
-        # En remplaçant 2026 par 2025, on décale la fenêtre d'analyse
         annee_limite = 2025 - options_periode[periode_sel] + 1
         df_temp = df_temp[df_temp["Date_fermeture_finale"].dt.year >= annee_limite]
         
@@ -68,7 +65,6 @@ with st.sidebar:
 # --- 3. PRÉPARATION ---
 df_fermes_only = df_selection[df_selection["fermeture"] == 1].copy()
 
-# Extraction propre des catégories principales
 top_secteurs_list = df_fermes_only['libelle_section_ape'].value_counts().head(10).index.astype(str).tolist()
 
 # --- 4. TITRE ET TOP SECTEURS ---
@@ -171,7 +167,7 @@ with st.container(border=True):
 
     # 2. Calcul du pivot
     if not df_heatmap_raw.empty:
-        # --- On restreint ici aux 10 secteurs identifiés en amont ---
+
         df_heatmap_raw = df_heatmap_raw[df_heatmap_raw["libelle_section_ape"].astype(str).isin(top_secteurs_list)]
         
         df_pivot_heat = (
@@ -194,7 +190,7 @@ with st.container(border=True):
         fig_heat.update_layout(height=500, margin=dict(l=200, r=20, t=20, b=20), coloraxis_showscale=False)
         st.plotly_chart(fig_heat, use_container_width=True)
         
-        # Commentaire dynamique de l'assistant
+        # Commentaire dynamique
         with st.chat_message("assistant"):
             if len(annees_selectionnees) > 1:
                 st.markdown(f"**Analyse :** Cette heatmap affiche une moyenne mensuelle lissée sur la période sélectionnée. Les zones sombres identifient les pics de saisonnalité récurrents.")
@@ -204,4 +200,4 @@ with st.container(border=True):
         st.info("Sélectionnez une période contenant des données pour afficher la Heatmap.")
 
 st.divider()
-st.caption("ℹ️ Source : Base SIRENE & Bilans Publics | Focus méthodologique : SAS & SARL.")
+st.caption("ℹ️ Source : Base SIRENE & Infogreffe | Focus méthodologique : SAS & SARL.")

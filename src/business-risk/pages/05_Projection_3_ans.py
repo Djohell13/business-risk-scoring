@@ -17,13 +17,10 @@ def get_france_geojson():
 
 # --- LOGIQUE DE RÉCUPÉRATION CENTRALISÉE ---
 if 'df' in st.session_state and st.session_state['df'] is not None:
-    # 🎯 Récupération directe du dataset global de la main
     df_raw = st.session_state['df'].copy()
-    
-    # Nettoyage et préparation des données de projection
+
     df_proj = df_raw[df_raw['Statut_Expert'] != '⚫ FERMÉ'].copy()
-    
-    # Nettoyage robuste des codes départements (gère les formats textes et numériques)
+
     df_proj["dep_code"] = df_proj["Code du département de l'établissement"].astype(str).str.strip().str.replace(r'\.0$', '', regex=True).str.zfill(2)
     
     # Exclusion des DOM-TOM pour focaliser l'analyse cartographique métropolitaine
@@ -213,4 +210,4 @@ with st.expander("⚖️ Note sur l'interprétation"):
     st.markdown(f"Ce diagnostic à N+{h_val} identifie les zones de fragilité atypique par rapport à la moyenne nationale du moment.")
 
 st.divider()
-st.caption("ℹ️ Source : Base SIRENE & Bilans Publics | Focus méthodologique : SAS & SARL.")
+st.caption("ℹ️ Source : Base SIRENE & Infogreffe | Focus méthodologique : SAS & SARL.")

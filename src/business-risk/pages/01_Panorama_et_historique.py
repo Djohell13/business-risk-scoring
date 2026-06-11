@@ -3,7 +3,7 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 
-# 1. DÉFINITION DES UTILITAIRES (Fonctions)
+# 1. DÉFINITION DES UTILITAIRES
 def format_date_fr(date_obj):
     mois_fr = [
         "", "janvier", "février", "mars", "avril", "mai", "juin", 
@@ -38,14 +38,11 @@ with st.sidebar:
     st.markdown("---")
     st.caption(f"🌍 **Base analysée :** {len(df_selection):,} établissements")
 
-# --- 3. ENTÊTE ---
 st.title("📊 1. Historique")
 
-# --- 4. GRAPHIQUES ---
+# --- 3. GRAPHIQUES ---
 
-# =====================================================================
 # Graphique 1 : Dynamique mensuelle (Focus 2023+)
-# =====================================================================
 
 st.subheader("📅 Tendances mensuelles des fermetures depuis 2023")
 
@@ -96,7 +93,7 @@ with st.container(border=True):
 last_date = df_clean["Date_fermeture_finale"].max()
 totals_par_an = df_pivot.sum()
 
-# Calcul des messages narratifs
+# Messages narratifs
 parts = []
 if 2023 in totals_par_an and 2024 in totals_par_an:
     var_23_24 = ((totals_par_an[2024] - totals_par_an[2023]) / totals_par_an[2023]) * 100
@@ -119,23 +116,19 @@ taux_hist = (df_selection["fermeture"].mean() * 100) / nb_annees_total
 
 # Fonction utilitaire pour calculer le taux annuel sur une période donnée
 def get_taux_annuel(df_data, n_annees):
-    # Fixer la fin de la période au 31/12/2025 pour avoir des années pleines
     annee_fin = 2025
     annee_debut = annee_fin - n_annees + 1
-    
-    # 1. On ne prend que les sociétés existantes ou fermées AVANT 2026
+
     df_window = df_data[
         (df_data["Date_fermeture_finale"].isna()) | 
         (df_data["Date_fermeture_finale"].dt.year <= annee_fin)
     ].copy()
-    
-    # 2. On compte les fermetures sur la fenêtre (ex: 2024-2025)
+
     nb_fermetures = len(df_window[
         (df_window["fermeture"] == 1) & 
         (df_window["Date_fermeture_finale"].dt.year >= annee_debut)
     ])
-    
-    # 3. Calcul du taux annuel moyen
+
     taux = (nb_fermetures / len(df_window) * 100) / n_annees
     return taux
 
@@ -143,7 +136,7 @@ taux_3ans = get_taux_annuel(df_selection, 3)
 taux_2ans = get_taux_annuel(df_selection, 2)
 taux_2025 = get_taux_annuel(df_selection, 1)
 
-# --- CALCUL DES ÂGES (À placer juste après tes calculs de taux) ---
+# --- CALCUL DES ÂGES ---
 def get_age_moyen(df_data, n_annees):
     annee_fin = 2025
     annee_debut = annee_fin - n_annees + 1
@@ -164,23 +157,19 @@ age_2025 = get_age_moyen(df_selection, 1)
 st.subheader("📊 Evolution du taux de fermeture et de l'âge.")
 
 with st.container(border=True):
-    # Ligne 1 : Les Taux (Utilisation de symboles techniques)
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Taux Historique", f"{taux_hist:.2f}%")
     c2.metric("Taux (3 ans)", f"{taux_3ans:.2f}%", delta=f"{taux_3ans-taux_hist:+.2f}%", delta_color="inverse")
     c3.metric("Taux (2 ans)", f"{taux_2ans:.2f}%", delta=f"{taux_2ans-taux_hist:+.2f}%", delta_color="inverse")
     c4.metric("Taux 2025", f"{taux_2025:.2f}%", delta=f"{taux_2025-taux_hist:+.2f}%", delta_color="inverse")
     
-    st.markdown("---") # Séparation fine
-    
-    # Ligne 2 : Les Âges (Utilisation de symboles de durée/temps)
+    st.markdown("---")
     a1, a2, a3, a4 = st.columns(4)
     a1.metric("Âge moyen (Hist.)", f"{age_hist:.1f} ans")
     a2.metric("Âge moyen (3 ans)", f"{age_3ans:.1f} ans")
     a3.metric("Âge moyen (2 ans)", f"{age_2ans:.1f} ans")
     a4.metric("Âge moyen (2025)", f"{age_2025:.1f} ans")
 
-# --- AJOUTER CECI APRÈS LE BLOC KPI ---
 df_fermes = df_selection[df_selection["fermeture"] == 1]
 age_moyen = df_fermes["age_estime"].mean() if len(df_fermes) > 0 else 0
 
@@ -200,10 +189,8 @@ with st.expander("📝 Note sur la saisonnalité et les données"):
     * Les pics de fin d'année restent structurellement liés aux clôtures comptables et régularisations administratives.
     """)
 
-
-# =====================================================================
 # Graphique 2 : Âge (Volume) -> LIMITÉ À 50 ANS
-# =====================================================================
+
 st.subheader("🕰️ Analyse de la pérennité")
 
 with st.container(border=True):
@@ -252,7 +239,7 @@ with st.container(border=True):
         L'âge moyen ({age_moyen:.1f} ans) souligne une **fragilité structurelle précoce** et une difficulty à pérenniser les structures au-delà du premier cycle de croissance.
         """)
 
-# --- SYNTHÈSE PÉDAGOGIQUE RÉALIGNÉE ---
+# --- SYNTHÈSE PÉDAGOGIQUE ---
 st.info("""
     💡 **Corrélation Volume vs Intensité**
     
@@ -264,9 +251,8 @@ st.info("""
     **Conclusion :** Plus une structure accumule de l'ancienneté, plus son modèle se solidifie, réduisant à la fois le volume global des défaillances et le risque individuel de fermeture.
     """)
 
-# =====================================================================
 # Graphique 3 : Probabilité (INDICE DE VULNÉRABILITÉ JUSQU'À 49 ANS)
-# =====================================================================
+
 st.subheader("📈 Evolution du risque de fermeture selon l'âge")
 
 with st.container(border=True):
