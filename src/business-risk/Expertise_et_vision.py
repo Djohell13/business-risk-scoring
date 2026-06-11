@@ -10,7 +10,7 @@ import io
 # --- 1. CONFIGURATION ---
 st.set_page_config(page_title="Projet Égide | Expertise & Vision", layout="wide")
 
-# CSS (inchangé)
+# CSS
 st.markdown("""
     <style>
     .main-title { color: #FFFFFF; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); margin-top: 0; }
@@ -61,7 +61,7 @@ def check_space(space_id, token):
 
 # --- 3. INITIALISATION CENTRALISÉE ---
 if 'initialized' not in st.session_state:
-    # On utilise un spinner global transparent qui ne casse pas le layout
+
     with st.spinner("🔮 Chargement des dernières données..."):
         hf_token = os.environ.get("HF_TOKEN") or st.secrets.get("HF_TOKEN")
         
@@ -86,14 +86,13 @@ if 'initialized' not in st.session_state:
         
         # Fin de l'initialisation
         st.session_state['initialized'] = True
-        st.rerun() # Force un re-run propre IMMEDIATEMENT avant d'afficher quoi que ce soit
+        st.rerun()
 
 # --- 4. SIDEBAR & UI ---
 with st.sidebar:
 
     with st.container(border=True):
         st.markdown("**Périmètre d'analyse**")
-        # Sécurité d'affichage si total_rows n'est pas encore là
         total_rows = st.session_state.get('total_rows', 0)
         st.caption(f"• {total_rows:,}".replace(",", " ") + " Sociétés (SAS/SARL)")
         
