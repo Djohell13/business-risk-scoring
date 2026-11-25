@@ -1,15 +1,15 @@
-# 📉 Business Risk Scoring - Prédiction de Défaillance
+# Business Risk Scoring - Prédiction de Défaillance
 
 Ce projet est une solution complète de Data Science permettant d'analyser et de prédire le risque de défaillance des entreprises. Il combine une phase d'exploration de données (EDA), une modélisation poussée via XGBoost et une interface interactive Streamlit.
 
-## 🚀 Structure du Projet
+## Structure du Projet
 
 * **src/business-risk/** : Application Streamlit (Dashboard interactif).
 * **src/model/** : Notebooks de modélisation (Baseline, XGBoost v1 à v3).
 * **src/eda/** : Analyse exploratoire des données.
 * **src/uml/** : Modélisation des données.
 
-## 📊 Modèle de Données
+## Modèle de Données
 
 Voici comment les données seront structurées pour l'analyse de risque :
 
@@ -37,7 +37,7 @@ classDiagram
     Entreprise "1" -- "0..*" Evenement_Risque : subit
 ```
 
-## 🛠️ Installation et Utilisation
+## Installation et Utilisation
 
 ### 1. Cloner le projet
 ```bash
@@ -52,7 +52,7 @@ pip install -r requirements.txt
 streamlit run app.py
 ``` 
 
-🧠 Méthodologie
+Méthodologie
 
 * Exploration : Analyse de la firmographie et des secteurs d'activité.
 
