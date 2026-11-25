@@ -1,0 +1,64 @@
+name: Hugging Face Keep Alive
+
+on:
+  schedule:
+    # Toutes les 12 heures (UTC)
+    - cron: "17 */12 * * *"
+
+  # Permet de lancer le bot manuellement
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: huggingface-keepalive
+  cancel-in-progress: false
+
+jobs:
+  keep-alive:
+    name: Wake up Hugging Face Space
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check and wake Hugging Face Space
+        shell: bash
+        run: |
+          set -u
+
+          URL="https://huggingface.co/spaces/Djohell/business-risk"
+
+          echo "===================================="
+          echo " Hugging Face Keep Alive"
+          echo " $(date -u)"
+          echo "===================================="
+
+          for attempt in 1 2 3; do
+            echo ""
+            echo "Attempt $attempt / 3"
+
+            HTTP_CODE=$(curl \
+              --location \
+              --silent \
+              --show-error \
+              --output /dev/null \
+              --write-out "%{http_code}" \
+              --connect-timeout 20 \
+              --max-time 240 \
+              "$URL" || true)
+
+            echo "HTTP status: $HTTP_CODE"
+
+            if [[ "$HTTP_CODE" =~ ^[23][0-9][0-9]$ ]]; then
+              echo "SUCCESS: Space accessible."
+              exit 0
+            fi
+
+            echo "Space not ready. Waiting 30 seconds..."
+            sleep 30
+          done
+
+          echo ""
+          echo "ERROR: Space did not respond successfully."
+          exit 1
