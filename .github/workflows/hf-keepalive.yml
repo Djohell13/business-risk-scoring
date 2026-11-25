@@ -5,7 +5,6 @@ on:
     # Toutes les 12 heures (UTC)
     - cron: "17 */12 * * *"
 
-  # Permet de lancer le bot manuellement
   workflow_dispatch:
 
 permissions:
@@ -27,7 +26,7 @@ jobs:
         run: |
           set -u
 
-          URL="https://huggingface.co/spaces/Djohell/business-risk"
+          URL="https://djohell-business-risk.hf.space"
 
           echo "===================================="
           echo " Hugging Face Keep Alive"
