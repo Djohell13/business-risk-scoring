@@ -1,6 +1,6 @@
 # Business Risk Scoring - Prédiction de Défaillance
 
-Ce projet est une solution complète de Data Science permettant d'analyser et de prédire le risque de défaillance des entreprises. Il combine une phase d'exploration de données (EDA), une modélisation poussée via XGBoost et une interface interactive Streamlit.
+Ce projet est une solution complète de Data Science permettant d'analyser et de prédire le risque de défaillance des entreprises afin de déterminer des solutions de soutien préventives. Il combine une phase d'exploration de données (EDA), une modélisation poussée via XGBoost et une interface interactive Streamlit.
 
 🔗 [**Tester l'application interactive**](https://huggingface.co/spaces/Djohell/business-risk)
 🎥 [**Voir la présentation vidéo du projet (LinkedIn)**](https://lnkd.in/p/eKAweYZQ)
